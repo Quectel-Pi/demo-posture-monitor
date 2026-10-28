@@ -1,0 +1,18 @@
+# 整机重启后自启验证（2026-10-28 17:30）
+
+$ adb shell reboot; 等待 boot_completed=1
+
+$ systemctl is-active posture-guard      -> active
+$ systemctl is-enabled posture-guard     -> enabled
+$ ps -eo user,pid,cmd | grep posture    -> posture  2111 /opt/posture-guard/bin/posture_guard --config ... --headless
+                                           quectel  2646 /usr/bin/python3 /opt/posture-guard/ui/posture_guard_ui.py
+$ ls -l /run/posture-guard/             -> srw-rw-rw- 1 posture posture status.sock
+$ journalctl -u posture-guard | head    -> 2026-10-28T17:30:06 [INFO ] 生效配置:
+                                           camera=/dev/video73 640x480@20fps infer=8fps fmt=MJPEG
+
+状态 socket 首帧：
+  state=HEAD_DOWN present=True persons=3 fps=6.8 lat=18.0ms baseline=True session=ACTIVE
+  posture_state_zh=低头/趴桌  keypoints_valid=True
+
+结论：systemd 服务 + 用户会话 UI 两条自启链路都通，
+      模型/配置/校准基准/摄像头全部在无人工干预下恢复。
