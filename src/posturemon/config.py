@@ -44,8 +44,8 @@ DEFAULTS = {
     "eye_rest_duration_s": 20.0,
     "sedentary_interval_s": 2700.0, # 45 分钟久坐提醒
     # ---- 统计 ----
-    "db_path": "/var/lib/posture-monitor/posture.db",
-    "log_dir": "/var/log/posture-monitor",
+    "db_path": "/userdata/posture-monitor/data/posture.db",
+    "log_dir": "/userdata/posture-monitor/log",
     # ---- UI ----
     "fullscreen": True,
     "show_names": True,

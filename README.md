@@ -75,8 +75,8 @@ bash scripts/deploy-from-host.sh
 等价的手工版（板端离线也可用）：
 
 ```bash
-adb push . /tmp/posture-src && adb shell
-cd /tmp/posture-src && sudo bash scripts/install.sh --user=quectel
+adb push . /userdata/posture-monitor/pkg && adb shell
+cd /userdata/posture-monitor/pkg && sudo bash scripts/install.sh --user=quectel
 ```
 
 ### 3.3 生效
@@ -89,7 +89,7 @@ adb shell 'cat /run/posture-monitor/status.json'   # 不看屏也能确认在跑
 ### 3.4 自检
 
 ```bash
-adb shell 'cd /tmp/posture-src && sudo bash scripts/verify.sh'
+adb shell 'cd /userdata/posture-monitor/pkg && sudo bash scripts/verify.sh'
 ```
 
 ---
@@ -166,7 +166,8 @@ USB UVC ──► camera 线程（只保留最新帧，覆盖式）
 | `02-demo-skeleton.png` | 用离线样图驱动，可见骨架叠加 |
 | `verify-output.txt` | 自检 15 项全 PASS |
 | `bench-output.txt` | NPU 20.1ms / CPU 331ms（16.5×）基线 |
-| `status-sample.json` | 运行态快照 |
+| `status-sample.json` | 运行态快照（含一次真实违规计数） |
+| `db-dump.txt` | SQLite 按次落库的违规记录 |
 
 ---
 

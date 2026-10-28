@@ -180,7 +180,7 @@ adb shell 'PYTHONPATH=/opt/posture-monitor python3 -m posturemon.headless \
 adb shell 'cd /opt/posture-monitor && PYTHONPATH=. python3 tests/verify_decode.py'
 
 # 抓真实屏幕
-adb shell 'bash /tmp/posture-src/scripts/screenshot.sh /tmp/s.png' && adb pull /tmp/s.png
+adb shell 'bash /userdata/posture-monitor/pkg/scripts/screenshot.sh /tmp/s.png' && adb pull /tmp/s.png
 
 # 看 NPU driver / runtime 版本
 adb shell 'cat /sys/kernel/debug/rknpu/version'
@@ -195,3 +195,48 @@ adb shell 'python3 -c "d=open(\"/usr/lib/librknnrt.so\",\"rb\").read();import re
 | `cv2.VideoCapture(0)` 打不开 | 板端没有 `/dev/video0`，编号到 73+ | 用 `/dev/v4l/by-id/usb-...-video-index0` |
 | 首帧全黑 | UVC 启动慢 | `Camera.open()` 里已经预热 3 帧 |
 | 只支持 YUYV 640×480 | 摄像头能力限制 | 配置里 `camera_width/height` 就是 640×480 |
+
+---
+
+## 12. 重启后应用不自启（部署链路里最坑的一个）
+
+**症状**：手动 `systemctl restart gdm` 一切正常；**整机重启后**界面不出现，
+`/var/log/posture-monitor/app.log` 也不存在。
+
+**根因**：板端 `/var/log` 是 **软链 → `/var/volatile/log`（tmpfs）**，重启清空：
+
+```
+lrwxrwxrwx /var/log -> volatile/log
+tmpfs on /var/volatile type tmpfs (size=131072k)
+```
+
+而 autostart 的 `Exec` 写的是：
+
+```ini
+Exec=/bin/bash -lc 'exec /usr/local/bin/posture-monitor.sh >> /var/log/posture-monitor/app.log 2>&1'
+```
+
+目录不存在 → **bash 的重定向失败会让整条命令直接不执行**（连脚本都没跑），
+所以既没界面也没日志。
+
+**修法**（三处一起改）：
+
+1. 日志与数据库改到持久分区：`/userdata/posture-monitor/{log,data}`
+2. autostart 的 `Exec` 只留启动器路径，**不在 Exec 里做重定向**；
+   由启动器自己 `mkdir -p` + `exec >> log 2>&1`
+3. 用 `systemd-tmpfiles.d` 保证 `/run/posture-monitor`（属主 quectel）每次开机自动建好
+   —— 否则非 root 的启动器无法在 `/run` 下建目录，`status.json` 会静默写不进去
+
+**验证**：`adb shell reboot` 后等 40s，`cat /run/posture-monitor/status.json` 应有新时间戳。
+
+---
+
+## 13. GTK 报 `Unable to register the application ... NoReply`
+
+**症状**：日志里出现 Gtk-CRITICAL，窗口能开但没注册进 D-Bus。
+
+**根因**：autostart 在登录后 3s 就跑，偶尔用户 D-Bus 还没就绪。
+
+**修法**：启动器里用 `busctl --user list` 轮询最多 10s 再拉应用（已内置）。
+
+---

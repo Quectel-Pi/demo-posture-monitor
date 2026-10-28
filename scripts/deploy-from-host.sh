@@ -23,6 +23,8 @@ ADB=(adb)
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REMOTE=/opt/posture-monitor
+# 部署包落在持久分区（/tmp 是 tmpfs，重启即丢），方便随时重跑 verify/appctl
+SRC_DIR=/userdata/posture-monitor/pkg
 
 log() { echo -e "\033[1;34m[*]\033[0m $*"; }
 ok()  { echo -e "\033[1;32m[+]\033[0m $*"; }
@@ -44,9 +46,9 @@ TMP=$(mktemp -d)
 mkdir -p "$TMP/pkg"
 cp -a "$REPO/src" "$REPO/scripts" "$TMP/pkg/"
 tar -C "$TMP/pkg" -czf "$TMP/pkg.tgz" .
-"${ADB[@]}" shell "mkdir -p /tmp/posture-src"
-"${ADB[@]}" push "$TMP/pkg.tgz" /tmp/posture-src/pkg.tgz >/dev/null
-"${ADB[@]}" shell "cd /tmp/posture-src && tar xzf pkg.tgz && ls src/posturemon >/dev/null && echo ok"
+"${ADB[@]}" shell "mkdir -p $SRC_DIR"
+"${ADB[@]}" push "$TMP/pkg.tgz" $SRC_DIR/pkg.tgz >/dev/null
+"${ADB[@]}" shell "cd $SRC_DIR && tar xzf pkg.tgz && ls src/posturemon >/dev/null && echo ok"
 ok "代码已推送"
 
 if ls "$REPO"/models/* >/dev/null 2>&1; then
@@ -59,16 +61,16 @@ fi
 # ---------- 3. 安装 ----------
 log "远端安装"
 ARGS_STR="${INSTALL_ARGS[*]:-}"
-"${ADB[@]}" shell "cd /tmp/posture-src && bash scripts/install.sh $ARGS_STR"
+"${ADB[@]}" shell "cd $SRC_DIR && bash scripts/install.sh $ARGS_STR"
 ok "安装完成"
 
 echo
 log "下一步"
 cat <<HINT
   # 自检
-  adb shell "cd /tmp/posture-src && bash scripts/verify.sh"
+  adb shell "cd $SRC_DIR && bash scripts/verify.sh"
   # 看界面（需要重启 gdm 触发自动登录）
   adb shell "systemctl restart gdm"
   # 抓一张屏幕截图留证
-  adb shell "sudo bash $REMOTE/../posture-screenshot.sh /tmp/posture.png" && adb pull /tmp/posture.png
+  adb shell "bash $SRC_DIR/scripts/screenshot.sh /tmp/posture.png" && adb pull /tmp/posture.png
 HINT

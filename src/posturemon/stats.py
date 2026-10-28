@@ -45,7 +45,7 @@ class Stats:
         self._conn.commit()
         self._pending = {"present_s": 0.0, "bad_s": 0.0, "frames": 0}
         self._last_flush = time.time()
-        self._open_violation: dict[str, float] = {}
+        self._open_violation: dict[str, tuple[int, float]] = {}
 
     # ---------------- 累加 ----------------
     def add(self, present_s: float, bad_s: float, frames: int = 0):
@@ -76,19 +76,28 @@ class Stats:
             self._last_flush = time.time()
 
     # ---------------- 违规事件 ----------------
+    # 设计：开始时就插一行（duration=0），结束时 UPDATE 时长。
+    # 这样"今日违规次数"在违规进行中就已经能查到，进程被杀也不会丢这条记录。
     def violation_start(self, kind: str, ts: float | None = None):
+        start = ts if ts is not None else time.time()
         with self._lock:
-            self._open_violation.setdefault(kind, ts if ts is not None else time.time())
+            if kind in self._open_violation:
+                return
+            cur = self._conn.execute(
+                "INSERT INTO violation(day, ts, kind, duration) VALUES(?,?,?,?)",
+                (date.fromtimestamp(start).isoformat(), start, kind, 0.0))
+            self._open_violation[kind] = (int(cur.lastrowid), start)
+            self._conn.commit()
 
     def violation_end(self, kind: str, ts: float | None = None):
         now = ts if ts is not None else time.time()
         with self._lock:
-            start = self._open_violation.pop(kind, None)
-            if start is None:
+            row = self._open_violation.pop(kind, None)
+            if row is None:
                 return
-            self._conn.execute(
-                "INSERT INTO violation(day, ts, kind, duration) VALUES(?,?,?,?)",
-                (date.fromtimestamp(start).isoformat(), start, kind, max(0.0, now - start)))
+            rowid, start = row
+            self._conn.execute("UPDATE violation SET duration=? WHERE id=?",
+                               (max(0.0, now - start), rowid))
             self._conn.commit()
 
     def event(self, kind: str, note: str = ""):
@@ -121,6 +130,8 @@ class Stats:
 
     def close(self):
         try:
+            for kind in list(self._open_violation):
+                self.violation_end(kind)      # 退出时把进行中的违规时长补齐
             self.flush()
             self._conn.close()
         except Exception:

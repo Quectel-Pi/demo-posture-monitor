@@ -184,6 +184,25 @@ class PostureEngine:
         self._last_kpts = None
         self.total_bad_s = 0.0         # 本次会话累计不良时长
         self._last_tick = self.now
+        # 违规事件回调：(key, ts) -> None。用于把每一次违规落库（不依赖是否触发提醒）
+        self.on_violation_start = None
+        self.on_violation_end = None
+
+    def _emit_start(self, key, ts):
+        cb = self.on_violation_start
+        if cb:
+            try:
+                cb(key, ts)
+            except Exception:
+                pass
+
+    def _emit_end(self, key, ts):
+        cb = self.on_violation_end
+        if cb:
+            try:
+                cb(key, ts)
+            except Exception:
+                pass
 
     # ---------------- 关键点平滑 ----------------
     def _smooth(self, kpts):
@@ -266,9 +285,11 @@ class PostureEngine:
                     if now - r.since >= self.cfg.violation_hold_s:
                         r.on = True
                         r.count += 1
+                        self._emit_start(key, r.since)
             else:
                 if r.on and now - r.last_on > self.cfg.violation_clear_s:
                     r.on = False
+                    self._emit_end(key, r.last_on)
                 r.since = 0.0
 
         active = [key for key in VIOLATION_PRIORITY if self.rules[key].on]

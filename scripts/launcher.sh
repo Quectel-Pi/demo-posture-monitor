@@ -14,12 +14,28 @@
 set -uo pipefail
 
 APP_DIR="${APP_DIR:-/opt/posture-monitor}"
-LOG_DIR="${LOG_DIR:-/var/log/posture-monitor}"
+LOG_DIR="${LOG_DIR:-/userdata/posture-monitor/log}"
 RUN_DIR="${RUN_DIR:-/run/posture-monitor}"
 QUIT_FLAG=/tmp/.posture-monitor.quit
 
 rm -f "$QUIT_FLAG"
-mkdir -p "$LOG_DIR" "$RUN_DIR" 2>/dev/null || true
+# /var/log 在板端是 tmpfs 软链（重启清空），所以日志默认落 /userdata（持久分区）
+if ! mkdir -p "$LOG_DIR" "$RUN_DIR" 2>/dev/null; then
+    LOG_DIR=/tmp/posture-monitor-log
+    mkdir -p "$LOG_DIR"
+fi
+# 自己接管日志：autostart 的 `>> 路径` 在目录不存在时会让整条 Exec 失败（踩过）
+exec >>"$LOG_DIR/app.log" 2>&1
+echo "=== $(date '+%F %T') launcher start (uid=$(id -u)) LOG_DIR=$LOG_DIR ==="
+
+# 等用户 D-Bus 就绪：autostart 在登录后 3s 就跑，偶尔 dbus 还没活，
+# 会导致 GTK 报 "Unable to register the application ... NoReply"（窗口能开但没进 D-Bus）
+if [ -S "$XDG_RUNTIME_DIR/bus" ]; then
+    for _ in $(seq 1 20); do
+        busctl --user --timeout=1 list >/dev/null 2>&1 && break
+        sleep 0.5
+    done
+fi
 
 export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONUNBUFFERED=1
@@ -32,7 +48,8 @@ export XDG_RUNTIME_DIR
 # shellcheck disable=SC2086
 while true; do
     echo "=== $(date '+%F %T') start posture-monitor (pid $$) ==="
-    python3 -m posturemon ${POSTURE_ARGS:-}
+    # shellcheck disable=SC2086
+    python3 -m posturemon ${POSTURE_ARGS:-} "$@"
     rc=$?
     echo "=== $(date '+%F %T') exit rc=$rc ==="
     if [ -f "$QUIT_FLAG" ]; then

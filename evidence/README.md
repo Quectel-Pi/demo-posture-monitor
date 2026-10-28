@@ -4,7 +4,8 @@
 |---|---|
 | `01-live-fullscreen.png` | 一体机全屏界面实拍（kmsgrab 抓 DRM 真实扫描输出，1280×800） |
 | `02-demo-skeleton.png` | 用离线样图 `samples/zidane.jpg` 驱动，可见两人骨架叠加 |
-| `status-sample.json` | `/run/posture-monitor/status.json` 运行态快照 |
+| `status-sample.json` | `/run/posture-monitor/status.json` 运行态快照（含一次真实违规计数） |
+| `db-dump.txt` | SQLite 里按次落库的违规记录与当日累计 |
 | `verify-output.txt` | `scripts/verify.sh` 全量输出：**PASS=15 FAIL=0 WARN=0** |
 | `bench-output.txt` | `scripts/bench.sh` 性能基线（NPU vs CPU 各 50 次） |
 
@@ -73,14 +74,36 @@ bus.jpg:    RKNN 8 / ONNX 3 person(s)
 `latency_ms` 是 NPU 单帧耗时；`present/bad/label` 是判定结果；
 `today_bad_s`/`counts` 是当日累计（来自 SQLite）。
 
+## 判定链路实测（不是造的数据）
+
+连续两次快照抓到真实的违规 → 计数 → 落库 闭环：
+
+```
+# 违规进行中（status.json）
+"bad": true, "label": "身体前倾", "bad_duration_s": 16.2, "today_bad_s": 84.2,
+"counts": {"head_tilt": 1, "lean_forward": 1}
+
+# 同一次运行，SQLite（按「每一次违规」记一条：开始即插、结束补时长）
+day:       [('2026-10-28', 273.0, 86.5, 0)]      # 在座 273s / 不良 86.5s
+violation: [('head_tilt', 2.8), ('lean_forward', 10.1)]
+```
+
+说明：
+
+- `bad_duration_s` 是**当前这一段**连续不良；`today_bad_s` 是当日累计（持久化）。
+- `counts` 直接来自 SQLite，**重启不丢**。这也是为什么违规要「开始即落库」，
+  而不是等 60s 提醒触发才记 —— 否则用户提前坐正，这次违规就丢了。
+- 截图 `01-live-fullscreen.png` 里面板的状态大字是红色（`#ff5f5f`），
+  就是这一次 `lean_forward` 的实时渲染。
+
 ## 复现命令
 
 ```bash
-adb shell 'cd /tmp/posture-src && sudo bash scripts/verify.sh'
-adb shell 'cd /tmp/posture-src && bash scripts/appctl.sh stop'
-adb shell 'cd /tmp/posture-src && sudo bash scripts/bench.sh'
+adb shell 'cd /userdata/posture-monitor/pkg && sudo bash scripts/verify.sh'
+adb shell 'cd /userdata/posture-monitor/pkg && bash scripts/appctl.sh stop'
+adb shell 'cd /userdata/posture-monitor/pkg && sudo bash scripts/bench.sh'
 adb shell 'cd /opt/posture-monitor && PYTHONPATH=. python3 tests/verify_decode.py'
-adb shell 'cd /tmp/posture-src && bash scripts/appctl.sh start'
+adb shell 'cd /userdata/posture-monitor/pkg && bash scripts/appctl.sh start'
 ```
 
 > ⚠️ 应用运行时会独占 UVC 摄像头，所以摄像头/端到端两项会自动改用

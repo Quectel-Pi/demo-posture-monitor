@@ -19,11 +19,16 @@ from .rules import PostureEngine
 
 
 class Pipeline:
-    def __init__(self, cfg, source: str | None = None, use_camera: bool = True):
+    def __init__(self, cfg, source: str | None = None, use_camera: bool = True, stats=None):
         self.cfg = cfg
         self.backend, self.backend_desc = backends.make_backend(cfg)
         self.sdk = getattr(self.backend, "sdk", "?")
         self.engine = PostureEngine(cfg)
+        self.stats = stats
+        if stats is not None:
+            # 每一次违规（不管有没有触发提醒）都落库，这样"今日违规次数"重启也不丢
+            self.engine.on_violation_start = stats.violation_start
+            self.engine.on_violation_end = stats.violation_end
         self._lock = threading.Lock()
         self.frame = None
         self.frame_seq = -1

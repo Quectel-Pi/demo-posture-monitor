@@ -11,8 +11,9 @@
 set -euo pipefail
 
 APP_DIR=/opt/posture-monitor
-DATA_DIR=/var/lib/posture-monitor
-LOG_DIR=/var/log/posture-monitor
+# 注意：板端 /var/log -> /var/volatile/log 是 tmpfs，重启清空；/userdata 是持久分区
+DATA_DIR=/userdata/posture-monitor/data
+LOG_DIR=/userdata/posture-monitor/log
 CONF_DIR=/etc/posture-monitor
 LAUNCHER=/usr/local/bin/posture-monitor.sh
 
@@ -125,8 +126,19 @@ python3 "$REPO/scripts/make-assets.py" "$APP_DIR/assets/beep.wav" >/dev/null && 
 
 # ---------- 5. 目录权限 ----------
 log "数据/日志目录权限"
-install -d -o "$TARGET_USER" -g "$TARGET_USER" "$DATA_DIR" "$LOG_DIR"
-chmod 755 "$DATA_DIR" "$LOG_DIR"
+install -d -o "$TARGET_USER" -g "$TARGET_USER" /userdata/posture-monitor "$DATA_DIR" "$LOG_DIR"
+chmod 755 /userdata/posture-monitor "$DATA_DIR" "$LOG_DIR"
+
+log "安装 systemd-tmpfiles 规则（保证 /run 下的运行态目录每次开机自动建好）"
+cat > /etc/tmpfiles.d/posture-monitor.conf <<EOF
+# 由 scripts/install.sh 生成：一体机运行时目录
+d /run/posture-monitor 0775 $TARGET_USER $TARGET_USER -
+d /userdata/posture-monitor 0775 $TARGET_USER $TARGET_USER -
+d $DATA_DIR 0775 $TARGET_USER $TARGET_USER -
+d $LOG_DIR 0775 $TARGET_USER $TARGET_USER -
+EOF
+systemd-tmpfiles --create /etc/tmpfiles.d/posture-monitor.conf 2>/dev/null || true
+ok "/etc/tmpfiles.d/posture-monitor.conf"
 
 # ---------- 6. 配置 ----------
 if [ ! -f "$CONF_DIR/config.json" ]; then
@@ -159,7 +171,7 @@ if [ "$DO_AUTOSTART" = 1 ]; then
 Type=Application
 Name=Posture Monitor
 Comment=坐姿检测与护眼提醒一体机
-Exec=/bin/bash -lc 'exec $LAUNCHER >> $LOG_DIR/app.log 2>&1'
+Exec=$LAUNCHER
 X-GNOME-Autostart-enabled=true
 X-GNOME-Autostart-Delay=3
 Terminal=false

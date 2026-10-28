@@ -13,7 +13,7 @@
 set -uo pipefail
 
 APP_DIR=/opt/posture-monitor
-LOG_DIR=/var/log/posture-monitor
+LOG_DIR=/userdata/posture-monitor/log
 LAUNCHER=/usr/local/bin/posture-monitor.sh
 STATUS=/run/posture-monitor/status.json
 USER_NAME="${POSTURE_USER:-$(awk -F: '$3>=1000 && $3<65534 {print $1; exit}' /etc/passwd)}"

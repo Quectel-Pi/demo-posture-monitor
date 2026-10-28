@@ -8,7 +8,7 @@ import time
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk  # noqa: E402
+from gi.repository import Gio, Gtk  # noqa: E402
 
 from . import config as cfgmod  # noqa: E402
 from .pipeline import Pipeline  # noqa: E402
@@ -18,7 +18,12 @@ from .window import PostureWindow  # noqa: E402
 
 class PostureApp(Gtk.Application):
     def __init__(self, cfg, pipeline, stats):
-        super().__init__(application_id="com.quectel.PostureMonitor")
+        # NON_UNIQUE：一体机上只有一个实例，也不需要单实例转发。
+        # 真正的原因是从 autostart 拉起时用户 D-Bus 有时还没就绪，GtkApplication
+        # 会打一条 Gtk-CRITICAL "Unable to register the application ... NoReply"，
+        # 主流程无害但日志噪声大 —— 关掉 D-Bus 注册即可。
+        super().__init__(application_id="com.quectel.PostureMonitor",
+                         flags=Gio.ApplicationFlags.NON_UNIQUE)
         self.cfg = cfg
         self.pipeline = pipeline
         self.stats = stats
@@ -78,7 +83,7 @@ def main(argv=None) -> int:
 
     cfg = cfgmod.Config.load(overrides)
     stats = Stats(cfg.db_path)
-    pipe = Pipeline(cfg, source=source).start()
+    pipe = Pipeline(cfg, source=source, stats=stats).start()
 
     app = PostureApp(cfg, pipe, stats)
 

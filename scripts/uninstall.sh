@@ -26,8 +26,8 @@ fi
 
 if [ "$PURGE" = 1 ]; then
     echo "[*] --purge：删除数据/日志/配置/模型"
-    rm -rf /var/lib/posture-monitor /var/log/posture-monitor /etc/posture-monitor "$APP_DIR"
+    rm -rf /userdata/posture-monitor /var/lib/posture-monitor /etc/posture-monitor "$APP_DIR" /etc/tmpfiles.d/posture-monitor.conf
 else
-    echo "[*] 保留 /var/lib/posture-monitor（统计数据）、$APP_DIR/models"
+    echo "[*] 保留 /userdata/posture-monitor（统计数据与日志）、$APP_DIR/models"
 fi
 echo "[+] 完成。重启 gdm 或重启整机让桌面恢复原状。"

@@ -25,10 +25,12 @@
 ├── tests/                 # verify_decode.py
 ├── assets/beep.wav        # 提示音
 └── lib/                   # 可选：onnxruntime wheel 解压目录（PYTHONPATH）
+/userdata/posture-monitor/
+├── data/posture.db        # ★ 持久分区，重启不丢
+└── log/app.log            # ★ 持久分区（/var/log 是 tmpfs 软链，重启清空）
 /etc/posture-monitor/config.json              # 全部阈值/参数
-/var/lib/posture-monitor/posture.db           # SQLite（quectel 可写）
-/var/log/posture-monitor/app.log              # 启动器/程序输出
-/run/posture-monitor/status.json              # 运行态快照（每秒刷新）
+/etc/tmpfiles.d/posture-monitor.conf          # 开机自动建 /run 与 /userdata 下的目录
+/run/posture-monitor/status.json              # 运行态快照（每秒刷新，tmpfs 正常）
 /usr/local/bin/posture-monitor.sh             # 崩溃自愈启动器
 /home/quectel/.config/autostart/posture-monitor.desktop
 ```
@@ -76,7 +78,7 @@ bash scripts/deploy-from-host.sh --no-autologin     # 不动 GDM
 tar czf pkg.tgz src scripts
 adb push pkg.tgz models /tmp/                       # 或者推到 /opt/posture-monitor/models
 adb shell
-mkdir -p /tmp/posture-src && cd /tmp/posture-src && tar xzf /tmp/pkg.tgz
+mkdir -p /userdata/posture-monitor/pkg && cd /userdata/posture-monitor/pkg && tar xzf /tmp/pkg.tgz
 bash scripts/install.sh --user=quectel
 ```
 
@@ -85,7 +87,7 @@ bash scripts/install.sh --user=quectel
 ```bash
 adb shell 'systemctl restart gdm'                    # 出现自动登录 + 全屏界面
 adb shell 'cat /run/posture-monitor/status.json'
-adb shell 'cd /tmp/posture-src && sudo bash scripts/verify.sh'
+adb shell 'cd /userdata/posture-monitor/pkg && sudo bash scripts/verify.sh'
 ```
 
 `status.json` 正常长这样：
@@ -123,8 +125,8 @@ adb pull /tmp/screen-*.png
 ## 6. 回滚
 
 ```bash
-adb shell 'sudo bash /tmp/posture-src/scripts/uninstall.sh'          # 保留数据
-adb shell 'sudo bash /tmp/posture-src/scripts/uninstall.sh --purge'  # 连数据一起删
+adb shell 'sudo bash /userdata/posture-monitor/pkg/scripts/uninstall.sh'          # 保留数据
+adb shell 'sudo bash /userdata/posture-monitor/pkg/scripts/uninstall.sh --purge'  # 连数据一起删
 adb shell 'systemctl restart gdm'
 ```
 
@@ -137,5 +139,5 @@ adb shell 'systemctl restart gdm'
 - [ ] `status.json` 的 `backend` 是 `rknn(NPU)`（不是 `onnx(CPU)`）
 - [ ] `status.json` 的 `fullscreen` 为 `true`，`window` = 屏幕分辨率
 - [ ] 人手进入画面 → `present: true`；坐歪 2s 后 `bad: true` 且 `label` 有值
-- [ ] `sqlite3 /var/lib/posture-monitor/posture.db "select * from day"` 有当日行
+- [ ] `sqlite3 /userdata/posture-monitor/data/posture.db "select * from day"` 有当日行
 - [ ] 重启整机能自己回到界面

@@ -381,8 +381,6 @@ class PostureWindow(Gtk.ApplicationWindow):
             self.lbl_seated.set_text("0:00")
 
         counts = dict(today["counts"])
-        for k, v in self.engine.counts().items():
-            counts[k] = counts.get(k, 0) + v
         for key, lbl in self.count_labels.items():
             lbl.set_text(str(counts.get(key, 0)))
 
@@ -408,6 +406,7 @@ class PostureWindow(Gtk.ApplicationWindow):
         if self.alert_until and now > self.alert_until:
             self.alert_until = 0.0
             self.banner.set_visible(False)
+            self.alert_text, self.alert_sub = "", ""
 
         self.lbl_hint.set_text(
             "快捷键：R 手动护眼 · F 切换全屏 · Esc×2 退出"
@@ -462,12 +461,6 @@ class PostureWindow(Gtk.ApplicationWindow):
                    f"已经连续 {fmt_dur(bad_dur)} 坐姿不良，请坐正并放松肩膀", 8.0)
         self.stats.event("posture_alert", self.engine.main_label())
         beep()
-        # 记一次违规时长
-        for key, r in self.engine.rules.items():
-            if r.on:
-                self.stats.violation_start(key, r.since)
-                self.stats.violation_end(key, now)
-                r.since = now
 
     def flash(self, text, sub="", seconds=5.0):
         self.banner_text.set_text(text)

@@ -5,9 +5,9 @@
 set -uo pipefail
 
 APP_DIR=/opt/posture-monitor
-DATA_DIR=/var/lib/posture-monitor
+DATA_DIR=/userdata/posture-monitor/data
 CONF=/etc/posture-monitor/config.json
-LOG_DIR=/var/log/posture-monitor
+LOG_DIR=/userdata/posture-monitor/log
 SKIP_CAM=0
 [ "${1:-}" = "--no-cam" ] && SKIP_CAM=1
 
@@ -183,12 +183,16 @@ fi
 echo "== 6. 安装状态 =="
 [ -d "$APP_DIR/posturemon" ] && res PASS "代码目录" "$APP_DIR/posturemon" || res FAIL "代码目录" "缺失"
 [ -f "$CONF" ] && res PASS "配置文件" "$CONF" || res WARN "配置文件" "缺失（用内置默认值）"
-if [ -f "$DATA_DIR/posture.db" ]; then
+DB_PATH=$(python3 -c "
+import json
+try: print(json.load(open('$CONF'))['db_path'])
+except Exception: print('$DATA_DIR/posture.db')" 2>/dev/null)
+if [ -f "$DB_PATH" ]; then
     N=$(python3 -c "
 import sqlite3
-c=sqlite3.connect('$DATA_DIR/posture.db')
+c=sqlite3.connect('$DB_PATH')
 print(c.execute('select count(*) from violation').fetchone()[0])" 2>/dev/null || echo 0)
-    res PASS "统计数据库" "$DATA_DIR/posture.db（违规记录 $N 条）"
+    res PASS "统计数据库" "$DB_PATH（违规记录 $N 条）"
 else
     res WARN "统计数据库" "还没有（首次运行后生成）"
 fi
