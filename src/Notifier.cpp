@@ -229,6 +229,7 @@ std::string Notifier::SerializeStatus(const StatusSnapshot& s) const {
       .Str("explanation", s.explanation)
       .Bool("present", s.present)
       .Int("persons", s.persons)
+      .Int("persons_primary", s.persons_primary)
       .Num("latency_ms", s.latency_ms, 1)
       .Num("fps", s.fps, 1)
       .Int("frame_id", static_cast<long long>(s.frame_id))
@@ -281,6 +282,42 @@ void Notifier::Publish(const StatusSnapshot& snapshot) {
   has_published_ = true;
   if (clients_.empty()) return;
   Broadcast(SerializeStatus(snapshot));
+}
+
+void Notifier::PublishVideo(const std::vector<unsigned char>& jpeg, int width, int height,
+                            std::uint64_t seq) {
+  if (clients_.empty() || jpeg.empty()) return;
+  static const char* kTable =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string b64;
+  b64.reserve((jpeg.size() + 2) / 3 * 4);
+  size_t i = 0;
+  for (; i + 2 < jpeg.size(); i += 3) {
+    const std::uint32_t v = (static_cast<std::uint32_t>(jpeg[i]) << 16) |
+                            (static_cast<std::uint32_t>(jpeg[i + 1]) << 8) |
+                            static_cast<std::uint32_t>(jpeg[i + 2]);
+    b64.push_back(kTable[(v >> 18) & 0x3F]);
+    b64.push_back(kTable[(v >> 12) & 0x3F]);
+    b64.push_back(kTable[(v >> 6) & 0x3F]);
+    b64.push_back(kTable[v & 0x3F]);
+  }
+  if (i < jpeg.size()) {
+    std::uint32_t v = static_cast<std::uint32_t>(jpeg[i]) << 16;
+    const bool two = (i + 1 < jpeg.size());
+    if (two) v |= static_cast<std::uint32_t>(jpeg[i + 1]) << 8;
+    b64.push_back(kTable[(v >> 18) & 0x3F]);
+    b64.push_back(kTable[(v >> 12) & 0x3F]);
+    b64.push_back(two ? kTable[(v >> 6) & 0x3F] : '=');
+    b64.push_back('=');
+  }
+
+  Json j;
+  j.Str("type", "video")
+      .Int("seq", static_cast<long long>(seq))
+      .Int("w", width)
+      .Int("h", height)
+      .Str("jpeg", b64);
+  Broadcast(j.Build());
 }
 
 void Notifier::EmitEvent(const std::string& key, const std::string& title,

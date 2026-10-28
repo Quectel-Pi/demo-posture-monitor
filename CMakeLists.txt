@@ -49,6 +49,7 @@ add_library(posture_core STATIC
   src/Yaml.cpp
   src/Json.cpp
   src/Config.cpp
+  src/V4l2Probe.cpp
   src/CameraCapture.cpp
   src/RknnPoseEngine.cpp
   src/PostureAnalyzer.cpp

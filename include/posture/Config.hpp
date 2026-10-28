@@ -74,6 +74,15 @@ struct Config {
   bool log_keypoints = false;
   int retain_statistics_days = 30;
 
+  // ---- 界面视频流 ----
+  // 后台服务把采集画面编码成 JPEG 沿本地 unix socket 发给界面显示。
+  // 只在本机内存/本地 socket 里流转，不落盘、不出网（privacy 那几条仍强制为 false）。
+  // 关掉后界面只剩骨架（隐私更强的模式）。
+  bool ui_stream_video = true;
+  int ui_video_width = 640;      // 下采样宽度；0 = 原始宽度
+  int ui_video_fps = 10;         // 视频流帧率（与推理帧率无关）
+  int ui_jpeg_quality = 70;      // 1-100
+
   // ---- runtime（本版新增，部署路径）----
   std::string status_socket = "/run/posture-guard/status.sock";
   std::string state_dir = "/var/lib/posture-guard";

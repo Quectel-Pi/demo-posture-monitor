@@ -58,6 +58,11 @@ struct PrimarySelection {
   bool ambiguous = false;     // 多人尺寸接近 -> 不做个体判定（§11.4 / TC-11）
   int plausible_count = 0;
   std::string reason;
+  // 有检出但全被几何闸门拒掉时，这里放「最像人那个」被拒的原因，
+  // 用于把「无人」和「有人但机位不对」区分开（否则用户只会看到"无人"）。
+  std::string reject_reason;
+  bool saw_detection = false;
+  BBox reject_person_box;
 };
 
 class PostureAnalyzer {

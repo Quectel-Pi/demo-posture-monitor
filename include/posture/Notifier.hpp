@@ -11,6 +11,7 @@
 
 #include <sys/types.h>
 
+#include <cstdint>
 #include <deque>
 #include <map>
 #include <string>
@@ -27,7 +28,8 @@ struct StatusSnapshot {
   std::string posture_state_zh = "无法判定";
   std::string explanation;
   bool present = false;
-  int persons = 0;
+  int persons = 0;          // 引擎原始检出（w8a8 会有多尺度重复框）
+  int persons_primary = 0;  // 去重后的人数（真正用来判定的）
   double latency_ms = 0.0;
   double fps = 0.0;
   std::uint64_t frame_id = 0;
@@ -109,6 +111,10 @@ class Notifier {
 
   // 推送一帧状态给所有客户端（内部做 1Hz 节流，避免刷爆 UI）
   void Publish(const StatusSnapshot& snapshot);
+  // 推送一帧视频（JPEG 已编码 + base64）。返回是否真的发出去（没有客户端时 false）
+  void PublishVideo(const std::vector<unsigned char>& jpeg, int width, int height,
+                    std::uint64_t seq);
+
   // 推送一条通知事件
   void EmitEvent(const std::string& key, const std::string& title,
                  const std::string& detail, double active_s);

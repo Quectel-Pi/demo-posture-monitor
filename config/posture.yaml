@@ -13,7 +13,9 @@ camera:
   height: 480
   capture_fps: 20
   infer_fps: 8
-  preferred_pixel_format: "MJPEG"
+  # auto = 用设备实际支持的最好格式（有 MJPG 就用 MJPG 省 USB 带宽，否则用设备给的第一个）
+  # 也可以写死 "MJPG" / "YUYV" 强制某一种（不支持时会自动回退并打 WARN）
+  preferred_pixel_format: "auto"
   reconnect_backoff_s: 1.0
   reconnect_backoff_max_s: 15.0
 
@@ -53,6 +55,13 @@ eye_care:
   presence_confirm_s: 2
   absent_confirm_s: 10
   reminder_policy: "manual_ack_or_session_reset"   # 或 auto_restart
+
+ui:
+  # 界面上显示摄像头实时画面。关掉后界面只剩骨架（更隐私，但没法调机位）
+  stream_video: true
+  video_width: 640        # 下采样宽度，0 = 原始宽度
+  video_fps: 10           # 视频流帧率（与推理帧率无关）
+  jpeg_quality: 70
 
 notification:
   cooldown_s: 60

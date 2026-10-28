@@ -41,6 +41,7 @@ SKELETON = [
 
 CSS = b"""
 window, .root { background-color: #0b0e13; }
+.canvas { background-color: #05070a; }
 .panel { background-color: #11151c; padding: 20px 22px; }
 .title { font-size: 14px; font-weight: 700; color: #8fa3bd; letter-spacing: 1px; }
 .state-ok   { font-size: 46px; font-weight: 800; color: #4fd17a; }
@@ -86,10 +87,11 @@ STATE_CLASS = {
 class SocketClient:
     """后台线程持续读 status socket，把最新快照交给回调。"""
 
-    def __init__(self, path: str, on_status, on_event=None):
+    def __init__(self, path: str, on_status, on_event=None, on_video=None):
         self.path = path
         self.on_status = on_status
         self.on_event = on_event
+        self.on_video = on_video
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.connected = False
@@ -141,9 +143,12 @@ class SocketClient:
                             msg = json.loads(line.decode())
                         except ValueError:
                             continue
-                        if msg.get("type") == "status":
+                        kind = msg.get("type")
+                        if kind == "status":
                             self.on_status(msg)
-                        elif msg.get("type") == "notification" and self.on_event:
+                        elif kind == "video" and self.on_video:
+                            self.on_video(msg)
+                        elif kind == "notification" and self.on_event:
                             self.on_event(msg)
             except OSError as exc:
                 self.last_error = str(exc)
@@ -170,6 +175,10 @@ def build_ui(windowed: bool, socket_path: str):
 
     state = {
         "snapshot": {},
+        "video": None,          # Gdk.Texture
+        "video_wh": (0, 0),
+        "video_seq": 0,
+        "video_at": 0.0,
         "events": [],
         "rest_shown": False,
         "rest_deadline": 0.0,
@@ -222,12 +231,29 @@ def build_ui(windowed: bool, socket_path: str):
             body.set_vexpand(True)
             root.append(body)
 
-            # ---- 左：骨架画布 ----
+            # ---- 左：画面(Picture) + 骨架(DrawingArea 叠加) ----
+            # 用 Gtk.Picture 显示视频、透明 DrawingArea 叠骨架，而不是在 cairo 里
+            # 手工把 texture 画上去 —— 后者依赖 Gdk.cairo_set_source_paintable，
+            # 这个 GTK 版本上没有，会直接 AttributeError（踩过）。
+            self.canvas = Gtk.Overlay()
+            self.canvas.add_css_class("canvas")
+            self.canvas.set_hexpand(True)
+            self.canvas.set_vexpand(True)
+            body.append(self.canvas)
+
+            self.picture = Gtk.Picture()
+            self.picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+            self.picture.set_can_shrink(True)
+            self.picture.set_hexpand(True)
+            self.picture.set_vexpand(True)
+            self.canvas.set_child(self.picture)
+
             self.area = Gtk.DrawingArea()
             self.area.set_draw_func(self._draw_skeleton)
             self.area.set_hexpand(True)
             self.area.set_vexpand(True)
-            body.append(self.area)
+            self.area.set_can_target(False)     # 不抢事件
+            self.canvas.add_overlay(self.area)
 
             # ---- 右：状态面板 ----
             panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -326,7 +352,8 @@ def build_ui(windowed: bool, socket_path: str):
             root.append(overlay)
             self.rest_box.set_visible(False)
 
-            self.client = SocketClient(socket_path, self._on_status, self._on_event)
+            self.client = SocketClient(socket_path, self._on_status, self._on_event,
+                                       self._on_video)
             self.client.start()
             GLib.timeout_add(200, self._tick)
             self.connect("close-request", self._on_close)
@@ -359,6 +386,11 @@ def build_ui(windowed: bool, socket_path: str):
         def _on_event(self, msg):
             GLib.idle_add(self._apply_event, msg)
 
+        def _on_video(self, msg):
+            # base64 -> JPEG bytes -> Gdk.Texture。放在主线程做，
+            # 因为 Gdk 对象不保证线程安全；单帧解码 ~2ms，10fps 完全够
+            GLib.idle_add(self._apply_video, msg)
+
         def _apply_event(self, msg):
             state["events"].append(msg)
             state["banner_until"] = time.time() + 6.0
@@ -366,6 +398,22 @@ def build_ui(windowed: bool, socket_path: str):
             state["banner_sub"] = msg.get("detail", "")
             self.banner_box.remove_css_class("banner-ok")
             self.banner_box.add_css_class("banner")
+            return False
+
+        def _apply_video(self, msg):
+            import base64
+            try:
+                raw = base64.b64decode(msg["jpeg"])
+                texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(raw))
+            except Exception as exc:      # 不要静默，否则"没有画面"根本查不出来
+                print(f"[ui] 视频帧解码失败: {exc!r}", file=sys.stderr)
+                return False
+            state["video"] = texture
+            state["video_wh"] = (int(msg.get("w", 0)), int(msg.get("h", 0)))
+            state["video_seq"] = int(msg.get("seq", 0))
+            state["video_at"] = time.time()
+            self.picture.set_paintable(texture)
+            self.area.queue_draw()
             return False
 
         def _apply_status(self, msg):
@@ -407,7 +455,8 @@ def build_ui(windowed: bool, socket_path: str):
                 f"{m.get('backend','?')} · {m.get('runtime_version','?')}\n"
                 f"{m.get('frame_width',0)}x{m.get('frame_height',0)} · "
                 f"{m.get('latency_ms',0):.1f}ms · {m.get('fps',0):.1f}fps · "
-                f"人 {m.get('persons',0)}\n"
+                f"人 {m.get('persons_primary', m.get('persons',0))}"
+                f"/{m.get('persons',0)}\n"
                 f"模型 {str(m.get('model_sha256',''))[:16]}\n"
                 f"基线 {'已校准' if m.get('has_baseline') else '未校准'}"
                 + ("（免打扰中）" if m.get("snoozed") else ""))
@@ -439,6 +488,12 @@ def build_ui(windowed: bool, socket_path: str):
                 self.banner_box.set_visible(True)
                 self.banner_text.set_text(state["banner_text"])
                 self.banner_sub.set_text(state["banner_sub"])
+            # 视频停更检测（摄像头掉线时会停在最后一帧，必须显式提示）
+            if state["video"] is not None and state["video_at"]:
+                stale = now - state["video_at"]
+                if stale > 3.0:
+                    cr_state = state
+                    self.lbl_remain.set_text(f"⚠ 摄像头画面已停更 {int(stale)}s（检查设备/占用）")
             if not self.client.connected:
                 self.lbl_state.set_text("服务未连接")
                 for c in STATE_CLASS.values():
@@ -451,29 +506,42 @@ def build_ui(windowed: bool, socket_path: str):
 
         # -- 骨架绘制 --
         def _draw_skeleton(self, area, cr, width, height):
-            # 背景
-            cr.set_source_rgb(0.043, 0.055, 0.075)
-            cr.paint()
+            """只画叠加层（ROI/骨架/提示）。视频由下面的 Gtk.Picture 负责。
 
+            DrawingArea 是透明的，所以这里**不能**填充背景色，否则会盖住画面。
+            """
             snap = state["snapshot"]
-            # 图框：保持 4:3（摄像头是 640x480），水平居中
-            fw, fh = snap.get("frame_width") or 640, snap.get("frame_height") or 480
-            aspect = fw / fh if fh else 1.333
-            box_w = width
-            box_h = box_w / aspect
-            if box_h > height:
-                box_h = height
-                box_w = box_h * aspect
-            ox = (width - box_w) / 2
-            oy = (height - box_h) / 2
+            has_video = state["video"] is not None
 
-            cr.set_source_rgb(0.075, 0.09, 0.12)
-            cr.rectangle(ox, oy, box_w, box_h)
-            cr.fill()
+            # 与 Gtk.Picture(content_fit=CONTAIN) 完全一致的几何：等比缩放 + 居中
+            if has_video and state["video_wh"][1]:
+                fw, fh = state["video_wh"]
+            else:
+                fw = snap.get("frame_width") or 640
+                fh = snap.get("frame_height") or 480
+            if not fw or not fh:
+                return
+            scale = min(width / fw, height / fh)
+            box_w, box_h = fw * scale, fh * scale
+            ox, oy = (width - box_w) / 2, (height - box_h) / 2
 
-            # ROI
+            if not has_video:
+                # 没有视频流时才画一块底色 + 明确提示，避免用户以为摄像头坏了
+                cr.set_source_rgb(0.02, 0.028, 0.04)
+                cr.rectangle(ox, oy, box_w, box_h)
+                cr.fill()
+                cr.set_source_rgb(0.62, 0.48, 0.28)
+                cr.select_font_face("Sans", 0, 0)
+                cr.set_font_size(18)
+                txt = "视频流未开启（ui.stream_video=false），仅显示骨架" if snap \
+                    else "等待摄像头画面…"
+                ext = cr.text_extents(txt)
+                cr.move_to(ox + box_w / 2 - ext.width / 2, oy + box_h / 2)
+                cr.show_text(txt)
+
+            # ---- ROI 框 ----
             roi = snap.get("roi") or [0.1, 0.05, 0.8, 0.9]
-            cr.set_source_rgba(0.35, 0.62, 1.0, 0.35)
+            cr.set_source_rgba(0.35, 0.62, 1.0, 0.40)
             cr.set_line_width(1.5)
             cr.set_dash([8, 6])
             cr.rectangle(ox + roi[0] * box_w, oy + roi[1] * box_h,
@@ -482,15 +550,15 @@ def build_ui(windowed: bool, socket_path: str):
             cr.set_dash([])
 
             kp = snap.get("keypoints") or []
-            valid = snap.get("keypoints_valid") and len(kp) >= 34
+            valid = bool(snap.get("keypoints_valid")) and len(kp) >= 34
             if not valid:
-                cr.set_source_rgb(0.36, 0.42, 0.5)
+                cr.set_source_rgba(0.95, 0.85, 0.65, 0.9)
                 cr.select_font_face("Sans", 0, 0)
                 cr.set_font_size(20)
                 txt = "画面里没有可信的人体" if snap.get("present") is False \
                     else "等待关键点…"
                 ext = cr.text_extents(txt)
-                cr.move_to(width / 2 - ext.width / 2, height / 2)
+                cr.move_to(ox + box_w / 2 - ext.width / 2, oy + box_h - 28)
                 cr.show_text(txt)
                 return
 
@@ -498,40 +566,58 @@ def build_ui(windowed: bool, socket_path: str):
                    for i in range(17)]
             bad = snap.get("posture_state") not in ("NORMAL", "USER_AWAY", "UNKNOWN")
             if bad:
-                line_color = (1.0, 0.36, 0.36)
+                line_color = (1.0, 0.32, 0.32)
             elif snap.get("calibrating"):
                 line_color = (0.35, 0.71, 1.0)
             else:
-                line_color = (0.31, 0.82, 0.48)
+                line_color = (0.31, 0.90, 0.52)
 
-            cr.set_source_rgb(*line_color)
-            cr.set_line_width(3.0)
-            cr.set_line_cap(1)
-            for a, b in SKELETON:
-                cr.move_to(*pts[a])
-                cr.line_to(*pts[b])
-                cr.stroke()
+            # 描边：先画一层深色宽线，再画亮色细线，保证在任意画面上都看得清
+            for pass_i in (0, 1):
+                if pass_i == 0:
+                    cr.set_source_rgba(0, 0, 0, 0.55)
+                    cr.set_line_width(6.0)
+                else:
+                    cr.set_source_rgb(*line_color)
+                    cr.set_line_width(3.0)
+                cr.set_line_cap(1)
+                for a, b in SKELETON:
+                    cr.move_to(*pts[a])
+                    cr.line_to(*pts[b])
+                    cr.stroke()
 
             # 关节点
-            cr.set_source_rgb(1.0, 0.85, 0.2)
             for i, (px, py) in enumerate(pts):
                 r = 5.0 if i in (0, 5, 6) else 3.5
+                cr.set_source_rgba(0, 0, 0, 0.6)
+                cr.arc(px, py, r + 1.5, 0, 6.2832)
+                cr.fill()
+                cr.set_source_rgb(1.0, 0.86, 0.20)
                 cr.arc(px, py, r, 0, 6.2832)
                 cr.fill()
 
-            # 头肩标注
-            nose = pts[0]
-            lsh, rsh = pts[5], pts[6]
-            cr.set_source_rgb(0.55, 0.62, 0.72)
-            cr.set_line_width(1.2)
+            # 肩线与头轴参考线
+            nose, lsh, rsh = pts[0], pts[5], pts[6]
+            cr.set_source_rgba(0.75, 0.82, 0.92, 0.75)
+            cr.set_line_width(1.4)
             cr.move_to(*lsh)
             cr.line_to(*rsh)
             cr.stroke()
             mid = ((lsh[0] + rsh[0]) / 2, (lsh[1] + rsh[1]) / 2)
-            cr.set_source_rgba(0.55, 0.62, 0.72, 0.6)
+            cr.set_dash([5, 4])
             cr.move_to(*mid)
             cr.line_to(*nose)
             cr.stroke()
+            cr.set_dash([])
+
+            # 左下角标出画面尺寸与帧号，方便现场判断"画面是不是活的"
+            cr.set_source_rgba(0.75, 0.82, 0.92, 0.65)
+            cr.select_font_face("Sans", 0, 0)
+            cr.set_font_size(12)
+            cr.move_to(ox + 10, oy + box_h - 10)
+            cr.show_text(f"{fw}x{fh}  seq={state.get('video_seq', 0)}  "
+                         f"fps={snap.get('fps', 0):.1f}  "
+                         f"{snap.get('latency_ms', 0):.1f}ms")
 
     app = App()
     return app, state

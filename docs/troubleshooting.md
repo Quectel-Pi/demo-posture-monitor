@@ -209,22 +209,7 @@ ldconfig 缓存里查不到。
 
 ---
 
-## 11. 摄像头只用 YUYV，日志一直 WARN 期望 MJPEG
-
-**症状**：
-
-```
-[WARN] 期望 MJPEG 但实际是 YUYV（不影响功能，只是 USB 带宽占用更高）
-```
-
-**根因**：这台 UVC（icSpring）不提供 MJPG，只给 YUYV。
-`preferred_pixel_format` 只是「期望」，不是硬要求。
-
-**修法**：不用修。要么忽略，要么把配置改成 `preferred_pixel_format: "YUYV"` 让日志干净。
-
----
-
-## 12. `taskset`/`pkill -f` 把自己杀掉了
+## 11. `taskset`/`pkill -f` 把自己杀掉了
 
 **症状**：在 `adb shell` 里跑 `pkill -f "python3 -m posturemon"`，命令返回 137，
 什么都没干成。
@@ -242,7 +227,99 @@ for p in $(ps -eo pid,cmd | grep -E "bin/posture_guard" | grep -v grep | awk '{p
 
 ---
 
-## 13. 排障常用命令
+## 12. 界面上看不到摄像头画面（只有黑底几根线）
+
+**症状**：后台服务日志一切正常（`摄像头已打开`、`frame_id` 在涨、`persons` 有值），
+但屏幕上只有深色背景 + 骨架线条，看不到真实画面。
+
+**根因（本项目的真实原因）**：后台服务确实在抓帧，但**从来没有把像素发给界面**。
+架构上只传了「17 个归一化关键点」用来画骨架（当时按 §18.2 隐私要求做的减法），
+界面自然没有画面可显示。
+
+**修法**：加了一条独立的视频通道（`ui.stream_video`，默认开）：
+
+```
+posture-guard (每帧 cv::imencode JPEG → base64 → unix socket)
+   {"type":"video","seq":N,"w":640,"h":480,"jpeg":"<base64>"}
+        ▼
+posture_guard_ui.py  →  Gtk.Picture(content_fit=CONTAIN)
+                         + 透明 Gtk.DrawingArea 叠骨架
+```
+
+配置项：
+
+```yaml
+ui:
+  stream_video: true     # false = 只显示骨架（更隐私，但没法调机位）
+  video_width: 640       # 下采样宽度
+  video_fps: 10          # 视频帧率（与推理帧率无关）
+  jpeg_quality: 70
+```
+
+带宽：640×480 q70 ≈ 40KB/帧，base64 后 ~54KB，10fps ≈ 540KB/s，走本机 unix socket 无压力。
+图像**只在内存与本地 socket 里流转，不落盘、不出网**（`privacy.*` 仍强制为 false）。
+
+**这个改动不只是「好看」**：看不到画面就没法调机位，而机位不对正是之前校准失败的
+根本原因（见 §7）。有了画面，用户能立刻看出「头被裁掉了」。
+
+### 踩到的一个 GTK 坑
+
+最初想用 `Gdk.cairo_set_source_paintable(cr, texture, ...)` 直接在 DrawingArea 里画
+texture，本机 GTK 报：
+
+```
+AttributeError: 'gi.repository.Gdk' object has no attribute 'cairo_set_source_paintable'
+```
+
+改成 GTK4 原生组合：`Gtk.Overlay` 里塞 `Gtk.Picture` 做底、透明 `DrawingArea` 做叠加层。
+注意叠加层**不能**填充背景色，否则会把画面盖住。
+
+---
+
+## 13. 摄像头参数被硬编码，换摄像头就开不了
+
+**症状**：日志报 `无法打开摄像头`，或者 `期望 MJPEG 但实际是 YUYV` 一直 WARN，
+或者设了 640×480 出来却是 1280×720。
+
+**根因**：代码里直接 `cap.set(FRAME_WIDTH, 640)` 之类硬编码，没有先问设备支持什么。
+不同 UVC 差别很大 —— 本项目这块 icSpring 只有：
+
+```
+[0]: 'YUYV' (YUYV 4:2:2)
+     Size: Discrete 640x480
+        30 / 25 / 20 / 15 / 10 / 5 fps
+```
+
+**只有一个格式、只有一个分辨率**，连 MJPG 都没有。硬编码 MJPG 就是自找麻烦。
+
+**修法**：先枚举再协商（`src/V4l2Probe.cpp`）：
+
+1. `VIDIOC_QUERYCAP` → 确认是采集节点（`/dev/video74` 是 metadata 节点，会被拒）；
+2. `VIDIOC_ENUM_FMT` → 所有像素格式；
+3. `VIDIOC_ENUM_FRAMESIZES` → 每个格式支持的尺寸；
+4. `VIDIOC_ENUM_FRAMEINTERVALS` → 每个尺寸支持的帧率；
+5. `ChooseCapture()` 挑最接近的一组：格式优先压缩格式（省 USB 带宽），
+   尺寸取最接近面积，帧率取「不超过期望的最大值」；
+6. **设置顺序必须先 FOURCC 再分辨率** —— 反了驱动会按默认格式重新协商，
+   出现「明明设了 640×480 出来 1280×720」；
+7. 最后把「请求值 vs 实际协商值」一起打进日志，只在**真的不一致**时才 WARN。
+
+本机日志长这样：
+
+```
+摄像头能力：icspring camera: icspring camer [YUYV(640x480) ]
+摄像头已打开 /dev/video73 实际 640x480@20fps 格式 YUYV（请求 640x480 YUYV）
+```
+
+`preferred_pixel_format: "auto"` 表示「用设备能给的最好格式」；也可以写死
+`MJPG` / `YUYV`，不支持时会自动回退并说明原因。
+
+**为什么重要**：YUYV 640×480@30 的原始码率是 18MB/s，MJPG 通常只要 1–2MB/s。
+如果换一个支持 MJPG 的摄像头，`auto` 会自动选 MJPG，不用改代码。
+
+---
+
+## 14. 排障常用命令
 
 ```bash
 # 环境体检（编译器/OpenCV/NPU/摄像头/部署产物）
@@ -267,3 +344,5 @@ journalctl -u posture-guard --since '-10min' | grep -E "WARN|ERROR"
 # 谁占着摄像头
 fuser -v /dev/video73
 ```
+
+---

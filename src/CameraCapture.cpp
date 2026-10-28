@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "posture/Logger.hpp"
+#include "posture/V4l2Probe.hpp"
 
 namespace posture {
 namespace {
@@ -79,14 +80,56 @@ bool CameraCapture::TryOpen(std::string* err) {
     if (err) *err = "无法从 " + cfg_.camera_device + " 解析出 V4L2 索引";
     return false;
   }
+  // ---- 先问设备支持什么，再决定请求什么（而不是硬编码）----
+  CaptureRequest want;
+  want.width = cfg_.camera_width;
+  want.height = cfg_.camera_height;
+  want.fps = cfg_.capture_fps;
+  want.preferred_format = cfg_.preferred_pixel_format;
+
+  const V4l2Capabilities caps = ProbeV4l2(cfg_.camera_device);
+  CaptureChoice choice;
+  if (caps.ok) {
+    choice = ChooseCapture(caps, want);
+    std::string desc;
+    for (const auto& f : caps.formats) {
+      desc += f.code + "(";
+      for (size_t i = 0; i < f.sizes.size(); ++i) {
+        if (i) desc += ",";
+        desc += std::to_string(f.sizes[i].width) + "x" + std::to_string(f.sizes[i].height);
+      }
+      desc += ") ";
+    }
+    LOG_INFO("摄像头能力：", caps.card, " [", desc, "]");
+    if (!choice.ok) {
+      LOG_WARN("能力协商失败：", choice.error, "，退回 OpenCV 默认参数");
+    } else {
+      for (const auto& a : choice.adjustments) LOG_WARN("参数适配：", a);
+    }
+  } else {
+    LOG_WARN("读不到设备能力（", caps.error, "），按配置原样请求");
+  }
+
   if (!cap_.open(index, cv::CAP_V4L2)) {
     if (err) *err = "无法打开摄像头 " + cfg_.camera_device +
                     "（索引 " + std::to_string(index) + "）";
     return false;
   }
-  cap_.set(cv::CAP_PROP_FRAME_WIDTH, cfg_.camera_width);
-  cap_.set(cv::CAP_PROP_FRAME_HEIGHT, cfg_.camera_height);
-  cap_.set(cv::CAP_PROP_FPS, cfg_.capture_fps);
+
+  if (choice.ok) {
+    // 顺序很重要：先 FOURCC 再分辨率。反了的话驱动会按默认格式重新协商尺寸，
+    // 导致「明明设了 640x480，出来却是 1280x720」。
+    cap_.set(cv::CAP_PROP_FOURCC, static_cast<double>(choice.fourcc));
+    cap_.set(cv::CAP_PROP_FRAME_WIDTH, choice.width);
+    cap_.set(cv::CAP_PROP_FRAME_HEIGHT, choice.height);
+    if (choice.fps > 0) cap_.set(cv::CAP_PROP_FPS, choice.fps);
+    requested_fourcc_ = choice.format_code;
+  } else {
+    cap_.set(cv::CAP_PROP_FRAME_WIDTH, cfg_.camera_width);
+    cap_.set(cv::CAP_PROP_FRAME_HEIGHT, cfg_.camera_height);
+    cap_.set(cv::CAP_PROP_FPS, cfg_.capture_fps);
+    requested_fourcc_ = cfg_.preferred_pixel_format;
+  }
   // 缓冲 1 帧：永远只取最新画面，不排队（§14.3）
   cap_.set(cv::CAP_PROP_BUFFERSIZE, 1);
 
@@ -99,16 +142,22 @@ bool CameraCapture::TryOpen(std::string* err) {
   code[2] = static_cast<char>((fourcc >> 16) & 0xFF);
   code[3] = static_cast<char>((fourcc >> 24) & 0xFF);
   actual_fourcc_ = code;
+  actual_width_ = fw;
+  actual_height_ = fh;
 
-  // 有些 UVC 不支持 MJPEG，会在 set 之后回落到 YUYV；不用报错，但要记录下来
-  LOG_INFO("摄像头已打开 ", cfg_.camera_device, " 实际 ", fw, "x", fh, " 格式 ", actual_fourcc_);
-  if (fw != cfg_.camera_width || fh != cfg_.camera_height) {
-    LOG_WARN("摄像头未接受请求分辨率 ", cfg_.camera_width, "x", cfg_.camera_height,
-             "，实际 ", fw, "x", fh);
-  }
-  if (cfg_.preferred_pixel_format == "MJPEG" && actual_fourcc_ != "MJPG") {
-    LOG_WARN("期望 MJPEG 但实际是 ", actual_fourcc_,
-             "（不影响功能，只是 USB 带宽占用更高）");
+  const bool res_ok = choice.ok ? (fw == choice.width && fh == choice.height)
+                                : (fw == cfg_.camera_width && fh == cfg_.camera_height);
+  LOG_INFO("摄像头已打开 ", cfg_.camera_device, " 实际 ", fw, "x", fh, "@",
+           static_cast<int>(cap_.get(cv::CAP_PROP_FPS)), "fps 格式 ", actual_fourcc_,
+           "（请求 ", choice.ok ? (std::to_string(choice.width) + "x" +
+                                   std::to_string(choice.height) + " " + choice.format_code)
+                                : (std::to_string(cfg_.camera_width) + "x" +
+                                   std::to_string(cfg_.camera_height) + " " +
+                                   cfg_.preferred_pixel_format),
+           "）");
+  if (!res_ok) {
+    LOG_WARN("驱动最终给的是 ", fw, "x", fh, "，与协商结果不一致；"
+             "画面仍可用，后续 letterbox 会按实际尺寸处理");
   }
   return true;
 }

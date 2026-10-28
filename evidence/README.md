@@ -66,3 +66,34 @@ adb shell 'bash /opt/posture-guard/scripts/status.sh --watch'
 * `--source-image` 离线送帧模式**只用于验证渲染与链路**，不能当现场验收证据。
 * 现场验收要留下：`verify.sh` 输出 + `journalctl -u posture-guard` 片段 +
   截图 + 当时的 `status.json`。
+
+## 摄像头画面（2026-10-28 补）
+
+| 文件 | 内容 |
+|---|---|
+| `01-ui-fullscreen.png` | 现场实时画面 + 骨架叠加（画面区 108806 色，骨架红 4227px、关节点黄 590px） |
+| `02-ui-offline-source-image.png` | `--source-image` 离线送帧模式，验证视频通道不依赖摄像头 |
+
+判定"画面真的在跑"的方法（不靠肉眼）：
+
+```bash
+# 1) 画面区必须是照片纹理，不是纯色块
+python3 -c "
+import cv2,numpy as np
+im=cv2.imread('evidence/01-ui-fullscreen.png')[:, :900]
+print('颜色数', len(np.unique(im.reshape(-1,3),axis=0)))"   # 108806
+
+# 2) socket 上必须有 video 消息且 seq 在增长
+python3 - <<'PY'
+import socket, json
+s=socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect('/run/posture-guard/status.sock')
+buf=b''
+while b'\n' not in buf: buf += s.recv(65536)
+d=json.loads(buf.split(b'\n')[0]); print(d['type'], d.get('seq'), d.get('w'), d.get('h'))
+PY
+```
+
+`verify.sh` 里已经把这条做成硬检查（「视频流」一项），没有画面就是 FAIL。
+
+**证据配对**：截图必须与同一时刻的 `status-sample.json` 一起存。当前这一对是
+`posture_state_zh=正常 / keypoints_valid=true / persons 原始 2 → 去重后 1`。

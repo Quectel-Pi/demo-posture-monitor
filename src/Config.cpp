@@ -89,6 +89,15 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
   c.retain_statistics_days =
       yaml.Int("privacy.retain_statistics_days", c.retain_statistics_days);
 
+  c.ui_stream_video = yaml.Bool("ui.stream_video", c.ui_stream_video);
+  c.ui_video_width = yaml.Int("ui.video_width", c.ui_video_width);
+  c.ui_video_fps = yaml.Int("ui.video_fps", c.ui_video_fps);
+  c.ui_jpeg_quality = yaml.Int("ui.jpeg_quality", c.ui_jpeg_quality);
+  if (c.ui_jpeg_quality < 30) c.ui_jpeg_quality = 30;
+  if (c.ui_jpeg_quality > 95) c.ui_jpeg_quality = 95;
+  if (c.ui_video_fps < 1) c.ui_video_fps = 1;
+  if (c.ui_video_fps > 30) c.ui_video_fps = 30;
+
   c.status_socket = yaml.Str("runtime.status_socket", c.status_socket);
   c.state_dir = yaml.Str("runtime.state_dir", c.state_dir);
   c.stats_dir = yaml.Str("runtime.stats_dir", c.stats_dir);
@@ -127,6 +136,8 @@ std::string Config::Describe() const {
      << "s policy=" << reminder_policy << "\n";
   os << "notify: cooldown=" << cooldown_s << "s log=" << (headless_log ? "on" : "off")
      << " popup=" << (desktop_popup ? "on" : "off") << "\n";
+  os << "ui_video: stream=" << (ui_stream_video ? "on" : "off") << " w=" << ui_video_width
+     << " fps=" << ui_video_fps << " q=" << ui_jpeg_quality << "\n";
   os << "runtime: socket=" << status_socket << " state=" << state_dir
      << " stats=" << stats_dir << "\n";
   return os.str();

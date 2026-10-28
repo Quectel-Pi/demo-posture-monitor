@@ -281,13 +281,35 @@ PrimarySelection PostureAnalyzer::SelectPrimary(const std::vector<PersonPose>& p
                                                 int frame_width, int frame_height) const {
   PrimarySelection sel;
   std::vector<std::pair<float, const PersonPose*>> scored;
+  const PersonPose* biggest = nullptr;
+  float biggest_area = 0.f;
   for (const auto& p : persons) {
+    if (p.person_confidence < cfg_.pose_confidence) continue;
+    sel.saw_detection = true;
     const PostureMetrics m = ComputeMetrics(p, frame_width, frame_height);
-    if (!Plausible(m, p, frame_width, frame_height)) continue;
-    scored.emplace_back(p.box.Area() * p.person_confidence, &p);
+    if (m.valid && Plausible(m, p, frame_width, frame_height)) {
+      scored.emplace_back(p.box.Area() * p.person_confidence, &p);
+      continue;
+    }
+    // 记下最像人的那个被拒原因，供上层区分"无人"与"机位不对"
+    if (!m.valid) {
+      if (p.box.Area() > biggest_area) {
+        biggest_area = p.box.Area();
+        biggest = &p;
+        sel.reject_reason = m.invalid_reason;
+        sel.reject_person_box = p.box;
+      }
+    } else if (p.box.Area() > biggest_area) {
+      biggest_area = p.box.Area();
+      biggest = &p;
+      sel.reject_reason = "人体相对画面的位置/比例不合理（可能有半个身子在画面外）";
+      sel.reject_person_box = p.box;
+    }
   }
   if (scored.empty()) {
-    sel.reason = "画面内没有可信的人体";
+    sel.reason = sel.saw_detection ? "检出人体但几何特征不可用"
+                                   : "画面内没有可信的人体";
+    (void)biggest;
     return sel;
   }
   std::sort(scored.begin(), scored.end(),
@@ -353,8 +375,15 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
     if (last_valid_at_ && SecondsBetween(*last_valid_at_, now) > cfg_.missing_data_timeout_s) {
       ResetRules();
     }
-    obs.state = sel.plausible_count == 0 ? PostureState::kUserAway : PostureState::kUnknown;
-    obs.explanation = sel.reason;
+    if (sel.saw_detection) {
+      // 有人入镜但几何量不可用：这是「机位/取景问题」，不是「无人」。
+      // 必须说清楚，否则用户只会看到"无人"，永远想不到要调摄像头。
+      obs.state = PostureState::kUnknown;
+      obs.explanation = sel.reject_reason.empty() ? sel.reason : sel.reject_reason;
+    } else {
+      obs.state = PostureState::kUserAway;
+      obs.explanation = sel.reason;
+    }
     return obs;
   }
 

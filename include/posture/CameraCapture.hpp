@@ -37,6 +37,8 @@ class CameraCapture {
   int reconnect_count() const { return reconnect_count_; }
   double last_read_ms() const { return last_read_ms_; }
   std::string actual_fourcc() const { return actual_fourcc_; }
+  int actual_width() const { return actual_width_; }
+  int actual_height() const { return actual_height_; }
 
  private:
   bool TryOpen(std::string* err);
@@ -50,7 +52,10 @@ class CameraCapture {
   int reconnect_count_ = 0;
   double backoff_s_ = 1.0;
   double last_read_ms_ = 0.0;
+  int actual_width_ = 0;
+  int actual_height_ = 0;
   std::string actual_fourcc_;
+  std::string requested_fourcc_;
   std::string device_id_;
 };
 

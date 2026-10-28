@@ -140,17 +140,19 @@ adb shell '/opt/posture-guard/bin/posture_guard --config /etc/posture-guard/post
   [PASS] 推理后端             rknn(NPU)
   [PASS] 推理耗时             17.4 ms/帧（NPU，目标 <200ms）
   [PASS] 推理帧率             6.9 fps（配置上限 camera.infer_fps）
+  [PASS] 视频流               3 秒内收到 3 帧 640x480 JPEG（界面能看到画面）
   [PASS] 出帧中               frame_id 311 -> 345
   [PASS] 统计落盘             stats-2026-10-28.jsonl (115 行)
   [PASS] 校准基线             肩线基准 4.5°, 样本 23 帧, 建立于 2026-10-28T17:19:03.297
   [PASS] 近 10 分钟无 ERROR   0 条
   [PASS] 桌面界面             /opt/posture-guard/ui/posture_guard_ui.py
 
-================ 结果：PASS=16  FAIL=0  WARN=0 ================
+================ 结果：PASS=17  FAIL=0  WARN=0 ================
 ```
 
 ## 8. 还没做（诚实清单）
 
+* **视频流带宽/CPU 开销**：目前只记录了「功能正常」，没有量化 imencode+base64 的 CPU 占用。
 * **24 小时连续运行**（TC-12）：需要排期跑一夜，看 `journalctl` 与 RSS 曲线。
 * **误报率统计**（每小时的误提醒次数）：需要至少几小时的真实工作场景录像与人工标注。
 * **多用户**：当前只保存单个用户的基准。

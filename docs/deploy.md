@@ -77,9 +77,23 @@ adb shell 'cd /userdata/posture-src && bash scripts/deploy.sh'
 | 6 | 装 `posture-guard.service`，`daemon-reload` + `enable` |
 | 7 | `systemctl restart`，失败时直接打印 30 行日志 |
 
+## 4.5 摄像头参数
+
+不用手工配分辨率/格式。服务启动时会先用 `VIDIOC_ENUM_*` 问清设备能力，
+再挑最接近 `camera.*` 里配的一组，日志会打印「请求 vs 实际」：
+
+```
+摄像头能力：icspring camera: icspring camer [YUYV(640x480) ]
+摄像头已打开 /dev/video73 实际 640x480@20fps 格式 YUYV（请求 640x480 YUYV）
+```
+
+`camera.preferred_pixel_format: "auto"` = 用设备能给的最好格式
+（有 MJPG 就用 MJPG 省 USB 带宽）。换摄像头不用改代码。
+
 ## 5. 装桌面界面（可选）
 
-后台服务是无界面的。要屏幕提醒就再装一个用户会话里的 UI：
+后台服务是无界面的。要屏幕提醒就再装一个用户会话里的 UI
+（界面默认显示摄像头实时画面 + 骨架叠加，配置见 `ui.stream_video`）：
 
 ```bash
 adb shell 'sudo -u quectel env XDG_RUNTIME_DIR=/run/user/1000 bash /opt/posture-guard/scripts/install_ui_autostart.sh'

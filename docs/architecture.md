@@ -30,8 +30,14 @@
 在自动登录、多用户、无屏场景下会不稳定（实施方案 §13.3）。拆开后后台服务完全无界面，
 界面挂了也不影响计时与检测。
 
-**界面不接收原始画面**：socket 里只有 17 个归一化关键点，UI 用它们在本地重画骨架。
-所以系统不需要传输、缓存、落盘任何图片（§18.2 隐私要求）。
+**界面拿到的画面**：socket 上有两类消息 ——
+`{"type":"status"}`（每 0.5s，含 17 个归一化关键点）与
+`{"type":"video"}`（默认 10fps，`<w>x<h>` + base64 JPEG）。
+界面用 `Gtk.Picture` 显示视频、透明 `Gtk.DrawingArea` 叠骨架。
+
+画面**只在本机内存与本地 unix socket 里流转**：不落盘、不出网，
+`privacy.save_raw_video` / `save_face_images` 仍强制为 false（§18.2）。
+不想要画面就设 `ui.stream_video: false`，界面退回纯骨架模式。
 
 ## 2. 线程模型
 
@@ -115,6 +121,27 @@ w8a8 量化模型的关键点 `conf` 通道被整体量化摧毁（scale≈3.19�
    框中心抖动几十像素、IoU 达不到 NMS 阈值。不去重会把一个人判成「多人」；
 3. 去重后仍有两个人尺寸接近 → `ambiguous`，不做个体判定（§11.4 / TC-11）。
 
+## 4.5 摄像头参数协商
+
+不硬编码采集参数，先问设备（`src/V4l2Probe.cpp`）：
+
+```
+VIDIOC_QUERYCAP → 是不是采集节点（/dev/video74 这类 metadata 节点会被排除）
+VIDIOC_ENUM_FMT → 支持的像素格式
+VIDIOC_ENUM_FRAMESIZES → 每个格式的尺寸
+VIDIOC_ENUM_FRAMEINTERVALS → 每个尺寸的帧率
+        ↓
+ChooseCapture(): 格式优先压缩(JPG省 USB 带宽) → 尺寸取最接近面积 → 帧率取不超期望的最大值
+        ↓
+cap.set(FOURCC) 再 cap.set(WIDTH/HEIGHT)     ← 顺序不能反
+        ↓
+日志记录「请求值 vs 实际值」，只有真不一致才 WARN
+```
+
+本机这块 icSpring 只给 `YUYV 640x480 @ 30/25/20/15/10/5fps`，一个格式一个分辨率。
+日志：`摄像头能力：icspring camera [YUYV(640x480) ]` +
+`实际 640x480@20fps 格式 YUYV（请求 640x480 YUYV）`。
+
 ## 5. 护眼业务
 
 状态机（§5.2 原文实现，`src/EyeCareMonitor.cpp`）：
@@ -146,7 +173,7 @@ BREAK_DUE --无人连续 10s--> ABSENT
 | 通道 | 内容 | 位置 |
 |---|---|---|
 | journald | 生命周期、校准、告警、错误 | `journalctl -u posture-guard` |
-| AF_UNIX | `{"type":"status",...}` 每 0.5s；`{"type":"notification",...}` 即时 | `/run/posture-guard/status.sock` |
+| AF_UNIX | `{"type":"status",...}` 每 0.5s；`{"type":"video",...}` 10fps；`{"type":"notification",...}` 即时 | `/run/posture-guard/status.sock` |
 | JSONL 统计 | 每 10s 一条 tick + 每次告警一条 alert | `/var/lib/posture-guard/stats/stats-YYYY-MM-DD.jsonl` |
 
 界面命令（客户端 → 服务）：`{"cmd":"ack"}`、`{"cmd":"snooze","minutes":15}`、
@@ -167,5 +194,7 @@ BREAK_DUE --无人连续 10s--> ABSENT
   是肩宽归一化的近似量，界面与日志都标了 approx 的含义（§1.1 / §16.7）。
 * `width_ratio` 只是「离屏过近趋势」，不是厘米距离。要真实距离需要 ToF（V2）。
 * 没做人脸 Landmark、没有相机标定、没有 ToF/环境光。
+* 视频流是 base64 编码进 JSON 的（简单可靠，但比裸二进制多 33% 带宽）；
+  640×480 q70 ≈ 540KB/s，本机 unix socket 完全够，换到网络传输要改成二进制帧。
 * 没做 Qt 界面，界面是 GTK4 单进程（同一台一体机够用）。
 * 多人场景只支持「锁定主用户」，不支持同时判定多个人。

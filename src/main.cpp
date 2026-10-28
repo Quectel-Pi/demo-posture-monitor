@@ -465,6 +465,9 @@ int main(int argc, char** argv) {
     snapshot.roi_w = cfg.roi_w;
     snapshot.roi_h = cfg.roi_h;
     double last_notification_at = -1.0;
+    double last_video_ms = 0.0;
+    std::uint64_t video_seq = 0;
+    std::vector<unsigned char> video_jpeg;
     bool auto_calibrate_armed = true;
 
     while (g_running) {
@@ -504,6 +507,7 @@ int main(int argc, char** argv) {
           analyzer.Update(persons, now, frame.width, frame.height);
 
       // ---- 主用户是否在座（用于护眼计时）----
+      // UNKNOWN 且有人入镜时仍算在座：只是姿态判不出来，人确实在
       const bool present = obs.state != PostureState::kUserAway;
       const auto eye = eye_care.Update(present, now);
 
@@ -585,12 +589,35 @@ int main(int argc, char** argv) {
         }
       }
 
+      // ---- 视频流（让界面能看到真实画面，也是调机位的唯一手段）----
+      if (cfg.ui_stream_video && cfg.ui_video_fps > 0) {
+        const double interval = 1000.0 / cfg.ui_video_fps;
+        if (now_ms - last_video_ms >= interval) {
+          last_video_ms = now_ms;
+          cv::Mat shown = frame.bgr;
+          cv::Mat scaled;
+          if (cfg.ui_video_width > 0 && frame.bgr.cols > cfg.ui_video_width) {
+            const double s2 = static_cast<double>(cfg.ui_video_width) / frame.bgr.cols;
+            cv::resize(frame.bgr, scaled, cv::Size(), s2, s2, cv::INTER_AREA);
+            shown = scaled;
+          }
+          const std::vector<int> params{cv::IMWRITE_JPEG_QUALITY, cfg.ui_jpeg_quality};
+          if (cv::imencode(".jpg", shown, video_jpeg, params)) {
+            notifier.PublishVideo(video_jpeg, shown.cols, shown.rows, ++video_seq);
+          }
+        }
+      }
+
       // ---- 更新快照并推送 ----
       snapshot.posture_state = ToString(obs.state);
       snapshot.posture_state_zh = ToChinese(obs.state);
       snapshot.explanation = obs.explanation;
       snapshot.present = present;
       snapshot.persons = static_cast<int>(persons.size());
+      {
+        const PrimarySelection ps = analyzer.SelectPrimary(persons, frame.width, frame.height);
+        snapshot.persons_primary = ps.plausible_count;
+      }
       snapshot.latency_ms = engine->last_latency_ms();
       snapshot.fps = fps;
       snapshot.frame_id = frame.frame_id;

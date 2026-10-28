@@ -78,26 +78,40 @@ else
   add FAIL "librknnrt" "系统里找不到（NPU 不可用）"
 fi
 
+read_status() {
+  # 读一行「type == status」的 JSON（socket 上会混着 video 消息，必须跳过）
+  timeout 8 python3 - "$SOCKET" <<'PROBE' 2>/dev/null
+import json, socket, sys, time
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(6); s.connect(sys.argv[1])
+buf = b""; t0 = time.time()
+while time.time() - t0 < 5.0:
+    try:
+        c = s.recv(65536)
+    except socket.timeout:
+        break
+    if not c:
+        break
+    buf += c
+    while b"\n" in buf:
+        line, buf = buf.split(b"\n", 1)
+        if not line.strip():
+            continue
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        if d.get("type") == "status":
+            print(json.dumps(d, ensure_ascii=False))
+            sys.exit(0)
+sys.exit(1)
+PROBE
+}
+
 # ---- 5. 状态 socket + 内容 ----
 if [[ -S "$SOCKET" ]]; then
   add PASS "状态 socket" "$SOCKET"
-  status="$(timeout 5 python3 - "$SOCKET" <<'PY' 2>/dev/null
-import json, socket, sys
-path = sys.argv[1]
-s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-s.settimeout(4)
-s.connect(path)
-buf = b""
-while b"\n" not in buf:
-    chunk = s.recv(4096)
-    if not chunk:
-        break
-    buf += chunk
-line = buf.split(b"\n")[0]
-d = json.loads(line.decode())
-print(json.dumps(d, ensure_ascii=False))
-PY
-)"
+  status="$(read_status)"
   if [[ -n "$status" ]]; then
     add PASS "状态可读" "$(echo "$status" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["posture_state"], d["posture_state_zh"])' 2>/dev/null)"
     backend="$(echo "$status" | python3 -c 'import json,sys;print(json.load(sys.stdin)["backend"])' 2>/dev/null)"
@@ -120,17 +134,7 @@ PY
     fi
     fid="$(echo "$status" | python3 -c 'import json,sys;print(json.load(sys.stdin)["frame_id"])' 2>/dev/null)"
     sleep 1.5
-    status2="$(timeout 5 python3 - "$SOCKET" <<'PY' 2>/dev/null
-import json, socket, sys
-s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(4); s.connect(sys.argv[1])
-buf = b""
-while b"\n" not in buf:
-    c = s.recv(4096)
-    if not c: break
-    buf += c
-print(json.dumps(json.loads(buf.split(b"\n")[0].decode()), ensure_ascii=False))
-PY
-)"
+    status2="$(read_status)"
     fid2="$(echo "$status2" | python3 -c 'import json,sys;print(json.load(sys.stdin)["frame_id"])' 2>/dev/null)"
     if [[ -n "$fid" && -n "$fid2" && "$fid2" -gt "$fid" ]]; then
       add PASS "出帧中" "frame_id $fid -> $fid2"
@@ -143,6 +147,41 @@ PY
   fi
 else
   add FAIL "状态 socket" "$SOCKET 不存在"
+fi
+
+# ---- 5b. 视频流（界面能不能看到画面）----
+vid="$(timeout 8 python3 - "$SOCKET" <<'PROBE' 2>/dev/null
+import json, socket, sys, time
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(6); s.connect(sys.argv[1])
+buf = b""; n = 0; wh = (0, 0); t0 = time.time()
+while time.time() - t0 < 3.0 and n < 3:
+    try:
+        c = s.recv(65536)
+    except socket.timeout:
+        break
+    if not c:
+        break
+    buf += c
+    while b"\n" in buf:
+        line, buf = buf.split(b"\n", 1)
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        if d.get("type") == "video":
+            n += 1
+            wh = (d.get("w", 0), d.get("h", 0))
+print(n, wh[0], wh[1])
+PROBE
+)"
+read -r vn vw vh <<< "${vid:-0 0 0}"
+if [[ "${vn:-0}" -ge 2 && "${vw:-0}" -gt 0 ]]; then
+  add PASS "视频流" "3 秒内收到 ${vn} 帧 ${vw}x${vh} JPEG（界面能看到画面）"
+elif [[ "${vn:-0}" -ge 1 ]]; then
+  add WARN "视频流" "只收到 ${vn} 帧，帧率偏低"
+else
+  add FAIL "视频流" "收不到视频帧：检查 ui.stream_video，或摄像头没出帧"
 fi
 
 # ---- 6. 统计与基线 ----

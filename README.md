@@ -19,7 +19,8 @@ GTK4 界面**，两个进程通过本地 socket 通信。
 | 托腮 | 手腕-鼻子距离 < 0.95 肩宽 持续 5s | ✅ |
 | 歪头 | 头轴相对基准偏 > 18° 持续 5s（近似量） | ✅ |
 | 离屏过近 | 肩宽/画面宽 > 0.75 持续 5s（趋势，非厘米） | ✅ |
-| 屏幕提醒 | 全屏骨架 + 红/绿状态 + 顶部横幅 | ✅ |
+| 屏幕提醒 | 全屏**摄像头实时画面** + 骨架叠加 + 红/绿状态 + 顶部横幅 | ✅ |
+| 摄像头适配 | 启动时 `VIDIOC_ENUM_*` 枚举格式/分辨率/帧率后协商，不硬编码 | ✅ |
 | 累计时长 | 每日在座/不良秒数 + 提醒次数，JSONL 持久化 | ✅ |
 | 20-20-20 护眼 | 连续用眼 20 分钟 → 全屏「远眺 20 秒」倒计时 | ✅ |
 | 个人校准 | 自动采集 5 秒正常坐姿 → 中位数基准（带离群过滤） | ✅ |
@@ -46,7 +47,7 @@ adb shell 'cd /userdata/posture-src && bash scripts/build_board.sh'
 # ── 板端：部署 + 自检
 adb shell 'cd /userdata/posture-src && bash scripts/deploy.sh'
 adb shell 'bash /opt/posture-guard/scripts/verify.sh'
-# ================ 结果：PASS=16  FAIL=0  WARN=0 ================
+# ================ 结果：PASS=17  FAIL=0  WARN=0 ================
 
 # ── 板端：装桌面全屏界面（自动登录后自动起）
 adb shell 'sudo -u quectel env XDG_RUNTIME_DIR=/run/user/1000 \
@@ -64,7 +65,7 @@ adb shell 'sudo -u quectel env XDG_RUNTIME_DIR=/run/user/1000 \
 | 推理帧率 | 6.9 fps（`camera.infer_fps: 8` 限流） |
 | 采集 | 640×480 YUYV（该 UVC 不提供 MJPG） |
 | 启动延迟 | `systemctl restart` → 出帧 < 2s |
-| 自检 | 16 项 PASS |
+| 自检 | 17 项 PASS（含视频流） |
 | 单元测试 | 3 个可执行，全通过 |
 
 ## 目录
@@ -80,7 +81,7 @@ src/
   UserCalibration.cpp       # 个人基准（中位数 + 离群过滤）
   EyeCareMonitor.cpp        # 20-20-20 会话状态机
   ReminderManager.cpp       # 冷却 / 合并 / 免打扰
-  Notifier.cpp              # journald + Unix socket + JSONL 统计
+  Notifier.cpp                # journald + 状态/视频/事件 socket + JSONL 统计
   Config.cpp Yaml.cpp Json.cpp Logger.cpp Types.cpp
 ui/posture_guard_ui.py      # GTK4 全屏界面（用户会话，订阅 socket）
 config/posture.yaml         # 运行配置
@@ -117,9 +118,14 @@ legacy/                     # 上一版 Python+GTK 单体实现（已停用，�
    只缺编译器；补编译器比对齐「交叉工具链 + sysroot + OpenCV + glibc」四件套便宜得多。
 3. **后台服务无界面 + 用户会话 UI**：systemd 系统服务拿不到图形会话权限，
    混在一起会在自动登录/多用户/无屏场景下不稳定（实施方案 §13.3 也是这个结论）。
-4. **界面只收关键点，不收画面**：隐私上更干净，带宽也更低；骨架在本地重画。
-5. **不引入第三方库**：YAML/JSON 都是内置的极小子集实现，因为板端没有这些包、也没有外网。
-6. **规则全部「相对个人基准」**：不搞「标准坐姿角度」，因为机位和人都会变。
+4. **界面能看到真实画面**：后台把采集帧压成 JPEG（默认 640 宽 / 10fps / q70）沿本地
+   socket 发给界面，界面用 `Gtk.Picture` 显示、透明层叠骨架。图像不落盘不出网，
+   不想要画面就 `ui.stream_video: false` 退回纯骨架模式。**没有画面就没法调机位**，
+   而机位不对正是判定失真的头号原因。
+5. **摄像头参数靠协商，不靠硬编码**：先 `VIDIOC_ENUM_*` 问清设备支持什么，再挑最接近的
+   一组（本地这块 UVC 只有 YUYV 640×480，连 MJPG 都没有）。
+6. **不引入第三方库**：YAML/JSON 都是内置的极小子集实现，因为板端没有这些包、也没有外网。
+7. **规则全部「相对个人基准」**：不搞「标准坐姿角度」，因为机位和人都会变。
 
 ## 状态
 
