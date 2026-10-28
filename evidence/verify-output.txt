@@ -1,5 +1,5 @@
 === posture-guard 自检 ===
-  [PASS] 服务运行中          pid 17253
+  [PASS] 服务运行中          pid 2102
   [PASS] 开机自启             enabled
   [PASS] 服务账号             posture，组: posture dialout sudo audio video plugdev input render netdev bluetooth
   [PASS] 配置可解析          camera=/dev/video73 640x480@20fps infer=8fps fmt=auto
@@ -8,11 +8,11 @@
   [PASS] 状态 socket            /run/posture-guard/status.sock
   [PASS] 状态可读             USER_AWAY 无人
   [PASS] 推理后端             rknn(NPU)
-  [PASS] 推理耗时             18.0 ms/帧（NPU，目标 <200ms）
-  [PASS] 推理帧率             5.9 fps（配置上限 camera.infer_fps）
-  [PASS] 出帧中                frame_id 838 -> 877
+  [PASS] 推理耗时             16.7 ms/帧（NPU，目标 <200ms）
+  [PASS] 推理帧率             6.3 fps（配置上限 camera.infer_fps）
+  [PASS] 出帧中                frame_id 861 -> 894
   [PASS] 视频流                3 秒内收到 3 帧 640x480 JPEG（界面能看到画面）
-  [PASS] 统计落盘             stats-2026-10-28.jsonl (279 行)
+  [PASS] 统计落盘             stats-2026-10-28.jsonl (293 行)
   [PASS] 校准基线             肩线基准 4.5°, 样本 23 帧, 建立于 2026-10-28T17:19:03.297
   [PASS] 近 10 分钟无 ERROR   0 条
   [PASS] 桌面界面             /opt/posture-guard/ui/posture_guard_ui.py
