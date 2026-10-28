@@ -6,6 +6,7 @@
 | `02-demo-skeleton.png` | 用离线样图 `samples/zidane.jpg` 驱动，可见两人骨架叠加 |
 | `status-sample.json` | `/run/posture-monitor/status.json` 运行态快照（含一次真实违规计数） |
 | `db-dump.txt` | SQLite 里按次落库的违规记录与当日累计 |
+| `metrics-sample.txt` | 现场有人坐在摄像头前时的连续指标采样（用于标定阈值） |
 | `verify-output.txt` | `scripts/verify.sh` 全量输出：**PASS=15 FAIL=0 WARN=0** |
 | `bench-output.txt` | `scripts/bench.sh` 性能基线（NPU vs CPU 各 50 次） |
 

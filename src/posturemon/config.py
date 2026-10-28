@@ -34,7 +34,7 @@ DEFAULTS = {
     "head_tilt_deg": 12.0,          # 双眼连线倾角超过 = 歪头
     "hand_to_face_ratio": 0.65,     # 手腕-鼻子距离 / sw 小于 = 托腮
     "lean_ratio": 0.35,             # |nose.x-neck.x| / sw 超过 = 身体前倾
-    "too_close_ratio": 0.62,        # sw / 画面宽 超过 = 离屏幕太近
+    "too_close_ratio": 0.75,        # sw / 画面宽 超过 = 离屏幕太近（实测坐姿 0.6~0.8，见 evidence/metrics-sample.txt）
     # ---- 状态机 ----
     "violation_hold_s": 2.0,        # 违规需持续多久才计数
     "violation_clear_s": 1.5,       # 恢复正常多久后清除

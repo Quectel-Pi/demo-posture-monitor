@@ -6,23 +6,23 @@
 == 2. 模型与后端 ==
   [PASS] RKNN 模型                        7.1M
   [PASS] ONNX 备援模型                  13M
-  BACKEND rknn(NPU) input=640x640 sdk=2.3.2 (429f97ae6b@2025-04-09T09:09:27) median=27.8ms
+  BACKEND rknn(NPU) input=640x640 sdk=2.3.2 (429f97ae6b@2025-04-09T09:09:27) median=27.1ms
   [PASS] 推理后端可加载              见上
 == 3. 坐姿判定规则（合成关键点自检）==
   [PASS] 6 条规则状态机               6 项通过
 == 4. 摄像头 ==
   [PASS] 摄像头设备                    /dev/v4l/by-id/usb-icSpring_icspring_camera-video-index0
-PASS 应用独占中：fps=29.4 推理=30.4ms 人员=1 状态=在座 快照0.1s前
-  [PASS] 摄像头出帧（应用内）     fps=29.4 推理=30.4ms
+PASS 应用独占中：fps=29.6 推理=27.2ms 人员=1 状态=在座 快照0.4s前
+  [PASS] 摄像头出帧（应用内）     fps=30.0 推理=27.7ms
 == 5. 端到端（真实推理 + 判定）==
-PASS rknn(NPU) | 推理 30.4ms | 人员=1 | 在座=True | 不良=False | 今日不良=93.2s
+PASS rknn(NPU) | 推理 27.7ms | 人员=1 | 在座=True | 不良=True(低头/趴桌) | 今日不良=170.5s
   [PASS] 端到端推理（应用内）     见上
 == 6. 安装状态 ==
   [PASS] 代码目录                       /opt/posture-monitor/posturemon
   [PASS] 配置文件                       /etc/posture-monitor/config.json
-  [PASS] 统计数据库                    /userdata/posture-monitor/data/posture.db（违规记录 4 条）
+  [PASS] 统计数据库                    /userdata/posture-monitor/data/posture.db（违规记录 10 条）
   [PASS] 开机自启                       /home/quectel/.config/autostart/posture-monitor.desktop
   [PASS] GDM 自动登录                   AutomaticLogin=quectel
-  [PASS] 进程运行中                    pid 7956 
+  [PASS] 进程运行中                    pid 5981 
 
 ================ 结果：PASS=15  FAIL=0  WARN=0 ================

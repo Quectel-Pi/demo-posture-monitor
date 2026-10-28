@@ -440,6 +440,7 @@ class PostureWindow(Gtk.ApplicationWindow):
                 "bad_duration_s": round(self.engine.bad_duration(), 1),
                 "today_bad_s": round(total_bad, 1),
                 "counts": counts,
+                "metrics": st.metrics.as_dict(),
                 "rest_active": bool(self.rest_until),
                 "banner": self.alert_text if self.alert_until else "",
             }
