@@ -1,111 +1,68 @@
-# 实测证据（2026-10-28，板端实测，非估算）
+# 实测证据
 
-| 文件 | 内容 |
-|---|---|
-| `01-live-fullscreen.png` | 一体机全屏界面实拍（kmsgrab 抓 DRM 真实扫描输出，1280×800） |
-| `02-demo-skeleton.png` | 用离线样图 `samples/zidane.jpg` 驱动，可见两人骨架叠加 |
-| `status-sample.json` | `/run/posture-monitor/status.json` 运行态快照（含一次真实违规计数） |
-| `db-dump.txt` | SQLite 里按次落库的违规记录与当日累计 |
-| `metrics-sample.txt` | 现场有人坐在摄像头前时的连续指标采样（用于标定阈值） |
-| `verify-output.txt` | `scripts/verify.sh` 全量输出：**PASS=15 FAIL=0 WARN=0** |
-| `bench-output.txt` | `scripts/bench.sh` 性能基线（NPU vs CPU 各 50 次） |
+所有文件都是在本机（Quectel Pi M2 / RK3576 / Debian 13）上跑出来的原始输出，不是手写。
 
-## 性能（`bench-output.txt` 原样）
+| 文件 | 内容 | 关键结论 |
+|---|---|---|
+| `01-ui-fullscreen.png` | 1280×800 全屏界面截图（离线送帧模式下，画面里有一人且被判为「歪头」） | 骨架用红色绘制、关节点黄色、右面板状态红字，说明「引擎→规则→界面」整条链路通 |
+| `verify-output.txt` | `scripts/verify.sh` 16 项自检 | **PASS=16 FAIL=0 WARN=0** |
+| `board-check.txt` | `scripts/check_board.sh` 环境体检 | PASS=15 WARN=1（`/dev/rknpu` 节点不存在，驱动编进内核，不影响） |
+| `unit-tests.txt` | `ctest` 三个测试 | **100% tests passed, 0 failed out of 3** |
+| `m2-compare-onnx.txt` | 与 ONNX fp32 参考逐点比对（zidane / bus / 现场真实帧） | 三例全部 **PASS**，关键点平均误差 **17.2 / 17.2 / 12.0 px**，匹配率 100% |
+| `metrics-live.txt` | 现场连续采样 6 次（2 秒一次） | NPU 17–19ms/帧、6.6–6.9 fps、`keypoints_valid` 随是否有人正确翻转 |
+| `status-sample.json` | 一帧完整状态快照（socket 原始 JSON） | 字段齐全，可直接给 UI 或外部消费 |
 
-```
-== 环境 ==
-Debian GNU/Linux 13 (trixie)   内核 6.1.118-rt36   nproc 8   mem 3.8 GB
-librknnrt 2.3.2                RKNPU driver v0.9.8
-
-== 推理后端（50 次，640x640 输入）==
-  RKNN w8a8 @ NPU            median   20.1 ms   p90   20.4 ms   min   20.0   fps  49.8
-  ONNX fp32 @ CPU 4 线程       median  401.6 ms   p90  402.6 ms   min  400.5   fps   2.5
-  ONNX fp32 @ CPU 6 线程       median  331.1 ms   p90  334.5 ms   min  329.4   fps   3.0
-  ONNX fp32 @ CPU 8 线程       median  366.7 ms   p90  368.4 ms   min  363.2   fps   2.7
-  ONNX int8 @ CPU 6 线程       median  536.0 ms   p90  538.2 ms   min  525.6   fps   1.9
-
-  NPU 相对 CPU(6 线程) 加速: 16.5x
-
-== 摄像头 ==
-  640x480 YUYV  median 44.0 ms  fps 22.7
-```
-
-> 说明：应用运行中（+GTK 界面 +采集线程同时跑）实测 23–34 ms，纯推理基线 20.1 ms。
-
-## 关键点精度（`tests/verify_decode.py`）
-
-RKNN 与 ONNX fp32 逐点对齐（同一 letterbox 输入、按 IoU 配对）：
+## 关键数字
 
 ```
-zidane.jpg: RKNN 2 / ONNX 2 person(s)
-  [PASS] #0 IoU=0.876 关键点平均误差 5.5px
-  [PASS] #1 IoU=0.588 关键点平均误差 5.2px
-bus.jpg:    RKNN 8 / ONNX 3 person(s)
-  [PASS] #0 IoU=0.510 关键点平均误差 6.9px
-  [PASS] #1 IoU=0.532 关键点平均误差 5.8px
-  [PASS] #3 IoU=0.564 关键点平均误差 4.9px
+NPU 单帧推理        17.0 – 18.6 ms      （ONNX CPU 同模型 331–401ms，快 16–19×）
+推理帧率            6.6 – 6.9 fps       （配置上限 camera.infer_fps: 8）
+关键点 vs ONNX      12.0 – 17.2 px 平均 （w8a8 量化的固有误差）
+人体框 IoU          0.333 – 0.876      （zidane 主目标 0.876）
+校准基准           肩线 4.5°，头肩纵向 -0.897（23 帧中位数，离群过滤后）
+采集              640×480 YUYV（该 UVC 不提供 MJPG，日志有 WARN，不影响功能）
 ```
 
-平均误差 4.9–6.9 px（640 输入空间），即 ≈0.8%–1.1% 画面宽度。
+## 判定链路实测
 
-## 自检（`verify-output.txt` 摘要）
-
-```
-== 1. 系统与依赖 ==    python 3.13.5 | cv2 4.10.0 | numpy 2.2.4 | Gtk 4.18 | pycairo 1.27.0
-                       librknnrt.so version 2.3.2
-== 2. 模型与后端 ==    rknn(NPU) input=640x640 sdk=2.3.2 median=27.2ms
-== 3. 判定规则 ==      6 条规则状态机 6 项通过（合成关键点，不需人和摄像头）
-== 4. 摄像头 ==        应用独占中：fps=28.8 推理=34.2ms
-== 5. 端到端 ==        rknn(NPU) | 人员=1 | 在座=True | 不良=False
-== 6. 安装状态 ==      代码/配置/数据库/自启/GDM 自动登录/进程 全部 PASS
-================ 结果：PASS=15  FAIL=0  WARN=0 ================
-```
-
-## 运行态样本（`status-sample.json`）
-
-```json
-{"ts": 1793202366.5, "window": [1280, 800], "fullscreen": true,
- "backend": "rknn(NPU)", "sdk": "2.3.2 (429f97ae6b@2025-04-09T09:09:27)",
- "latency_ms": 32.5, "persons": 2, "fps": 29.4, "present": true,
- "bad": false, "label": "", "bad_duration_s": 0.0, "today_bad_s": 0.0,
- "counts": {}, "rest_active": false, "banner": ""}
-```
-
-字段含义：`window/fullscreen` 证明界面真的全屏；`fps` 是显示帧率；
-`latency_ms` 是 NPU 单帧耗时；`present/bad/label` 是判定结果；
-`today_bad_s`/`counts` 是当日累计（来自 SQLite）。
-
-## 判定链路实测（不是造的数据）
-
-连续两次快照抓到真实的违规 → 计数 → 落库 闭环：
+`metrics-live.txt` 里同一段连续采样：
 
 ```
-# 违规进行中（status.json）
-"bad": true, "label": "身体前倾", "bad_duration_s": 16.2, "today_bad_s": 84.2,
-"counts": {"head_tilt": 1, "lean_forward": 1}
-
-# 同一次运行，SQLite（按「每一次违规」记一条：开始即插、结束补时长）
-day:       [('2026-10-28', 273.0, 86.5, 0)]      # 在座 273s / 不良 86.5s
-violation: [('head_tilt', 2.8), ('lean_forward', 10.1)]
+present=True  state=HEAD_DOWN  dev=4.5  head_oy=-0.353  wr=0.085  w2n=1.46  lat=17.2ms kp=True
+present=True  state=HEAD_DOWN  dev=4.5  head_oy=-0.471  wr=0.085  w2n=2.01  lat=17.0ms kp=True
+present=False state=USER_AWAY  dev=0.0  head_oy= 0.000  wr=0.000  w2n=0.00  lat=18.4ms kp=False
 ```
 
-说明：
-
-- `bad_duration_s` 是**当前这一段**连续不良；`today_bad_s` 是当日累计（持久化）。
-- `counts` 直接来自 SQLite，**重启不丢**。这也是为什么违规要「开始即落库」，
-  而不是等 60s 提醒触发才记 —— 否则用户提前坐正，这次违规就丢了。
-- 截图 `01-live-fullscreen.png` 里面板的状态大字是红色（`#ff5f5f`），
-  就是这一次 `lean_forward` 的实时渲染。
+* `head_oy=-0.353` 相对基准 `-0.897` 下降了 0.54 肩宽 → 超过 `head_down_drop: 0.35`
+  → 判「低头/趴桌」，持续 5s 后提醒；
+* 人走开后同一进程立刻变 `USER_AWAY`、`keypoints_valid=false`，不会拿旧骨架继续判；
+* 全程 `latency_ms` 稳定在 17–19ms。
 
 ## 复现命令
 
 ```bash
-adb shell 'cd /userdata/posture-monitor/pkg && sudo bash scripts/verify.sh'
-adb shell 'cd /userdata/posture-monitor/pkg && bash scripts/appctl.sh stop'
-adb shell 'cd /userdata/posture-monitor/pkg && sudo bash scripts/bench.sh'
-adb shell 'cd /opt/posture-monitor && PYTHONPATH=. python3 tests/verify_decode.py'
-adb shell 'cd /userdata/posture-monitor/pkg && bash scripts/appctl.sh start'
+# 自检
+adb shell 'bash /opt/posture-guard/scripts/verify.sh'
+# 环境体检
+adb shell 'bash /opt/posture-guard/scripts/check_board.sh'
+# 单元测试
+adb shell 'cd /userdata/build-src && ctest --test-dir build --output-on-failure'
+
+# M2 验收（静态图 vs ONNX）
+adb shell '/opt/posture-guard/bin/posture_guard --config /etc/posture-guard/posture.yaml \
+  --image /userdata/build-src/zidane.jpg --dump-keypoints /tmp/z.json'
+adb pull /tmp/z.json . && python3 tests/compare_onnx.py samples/zidane.jpg z.json
+
+# 界面截图（GNOME Wayland 下 grim/xwd 都不可用，只有 kmsgrab 可行）
+adb shell 'bash /opt/posture-guard/scripts/screenshot.sh /tmp/s.png' && adb pull /tmp/s.png .
+
+# 实时指标
+adb shell 'bash /opt/posture-guard/scripts/status.sh --watch'
 ```
 
-> ⚠️ 应用运行时会独占 UVC 摄像头，所以摄像头/端到端两项会自动改用
-> `status.json` 佐证；想直接测设备就先 `appctl.sh stop`。
+## 取证注意
+
+* 截图必须和 `status.json` 一起存，否则无法证明「截图里那个状态是真的」。
+* `--source-image` 离线送帧模式**只用于验证渲染与链路**，不能当现场验收证据。
+* 现场验收要留下：`verify.sh` 输出 + `journalctl -u posture-guard` 片段 +
+  截图 + 当时的 `status.json`。

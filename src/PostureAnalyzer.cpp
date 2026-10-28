@@ -1,0 +1,456 @@
+#include "posture/PostureAnalyzer.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
+#include "posture/Logger.hpp"
+
+namespace posture {
+namespace {
+
+constexpr float kRad2Deg = 57.29577951308232f;
+constexpr float kDeg2Rad = 0.017453292519943295f;
+constexpr float kMinShoulderPx = 24.f;
+
+float Dist(float ax, float ay, float bx, float by) {
+  const float dx = ax - bx;
+  const float dy = ay - by;
+  return std::sqrt(dx * dx + dy * dy);
+}
+
+double SecondsBetween(SteadyTime a, SteadyTime b) {
+  return std::chrono::duration<double>(b - a).count();
+}
+
+}  // namespace
+
+// --------------------------------------------------------------------------
+float PostureAnalyzer::NormalizeLineAngle(float deg) {
+  // 直线方向以 180° 为周期：折叠到 [-90, 90)
+  while (deg >= 90.f) deg -= 180.f;
+  while (deg < -90.f) deg += 180.f;
+  return deg;
+}
+
+float PostureAnalyzer::NormalizeAngle180(float deg) {
+  while (deg >= 180.f) deg -= 360.f;
+  while (deg < -180.f) deg += 360.f;
+  return deg;
+}
+
+float PostureAnalyzer::LineAngleDelta(float current, float baseline) {
+  return std::fabs(NormalizeLineAngle(current - baseline));
+}
+
+// --------------------------------------------------------------------------
+HoldRule::Result HoldRule::Update(std::optional<float> value, SteadyTime now) {
+  Result res;
+  if (!value.has_value()) {
+    // 没有有效输入：不新增异常，也不维持「持续计时」，但已激活的保持（迟滞），
+    // 由 PostureAnalyzer 在 missing_data_timeout 后统一 Reset。
+    abnormal_since_.reset();
+    recovery_since_.reset();
+    res.valid = false;
+    res.latched = latched_;
+    res.active_s = latched_at_ ? SecondsBetween(*latched_at_, now) : 0.0;
+    return res;
+  }
+  res.valid = true;
+  const float v = *value;
+  const bool above = cfg_.higher_is_bad ? (v > cfg_.trigger) : (v < cfg_.trigger);
+  const bool below_recover =
+      cfg_.higher_is_bad ? (v < cfg_.recover) : (v > cfg_.recover);
+
+  if (!latched_) {
+    if (!above) {
+      abnormal_since_.reset();
+    } else {
+      if (!abnormal_since_) abnormal_since_ = now;
+      if (SecondsBetween(*abnormal_since_, now) >= cfg_.hold_s) {
+        res.active_s = SecondsBetween(*abnormal_since_, now);   // 报告真实持续时间
+        latched_ = true;
+        latched_at_ = now;
+        abnormal_since_.reset();
+        recovery_since_.reset();
+        res.just_activated = true;
+      }
+    }
+  } else {
+    if (below_recover) {
+      if (!recovery_since_) recovery_since_ = now;
+      if (SecondsBetween(*recovery_since_, now) >= cfg_.recover_hold_s) {
+        latched_ = false;
+        recovery_since_.reset();
+        res.just_cleared = true;
+      }
+    } else {
+      recovery_since_.reset();
+    }
+  }
+  res.latched = latched_;
+  if (!res.just_activated) {
+    res.active_s = latched_at_ ? SecondsBetween(*latched_at_, now) : 0.0;
+  }
+  return res;
+}
+
+void HoldRule::Reset() {
+  latched_ = false;
+  abnormal_since_.reset();
+  recovery_since_.reset();
+  latched_at_.reset();
+}
+
+// --------------------------------------------------------------------------
+PostureAnalyzer::PostureAnalyzer(const Config& cfg, const Baseline& baseline)
+    : cfg_(cfg),
+      baseline_(baseline),
+      shoulder_rule_({.key = "shoulder_tilt",
+                      .label_zh = "高低肩",
+                      .trigger = cfg.shoulder_trigger_deg,
+                      .recover = cfg.shoulder_recover_deg,
+                      .hold_s = cfg.shoulder_hold_s,
+                      .recover_hold_s = cfg.recovery_hold_s,
+                      .higher_is_bad = true,
+                      .priority = 40}),
+      head_down_rule_({.key = "head_down",
+                       .label_zh = "低头/趴桌",
+                       .trigger = cfg.head_down_drop,
+                       .recover = cfg.head_down_drop * 0.5f,
+                       .hold_s = cfg.head_down_hold_s,
+                       .recover_hold_s = cfg.recovery_hold_s,
+                       .higher_is_bad = true,
+                       .priority = 50}),
+      head_tilt_rule_({.key = "head_tilt",
+                       .label_zh = "歪头",
+                       .trigger = cfg.head_tilt_deg,
+                       .recover = cfg.head_tilt_deg * 0.6f,
+                       .hold_s = cfg.head_tilt_hold_s,
+                       .recover_hold_s = cfg.recovery_hold_s,
+                       .higher_is_bad = true,
+                       .priority = 30}),
+      too_close_rule_({.key = "too_close",
+                       .label_zh = "离屏太近",
+                       .trigger = cfg.too_close_ratio,
+                       .recover = cfg.too_close_ratio - 0.08f,
+                       .hold_s = cfg.too_close_hold_s,
+                       .recover_hold_s = cfg.recovery_hold_s,
+                       .higher_is_bad = true,
+                       .priority = 20}),
+      hand_face_rule_({.key = "hand_on_face",
+                       .label_zh = "托腮",
+                       .trigger = cfg.hand_face_ratio,
+                       .recover = cfg.hand_face_ratio * 1.25f,
+                       .hold_s = cfg.hand_face_hold_s,
+                       .recover_hold_s = cfg.recovery_hold_s,
+                       .higher_is_bad = false,   // 距离越小越可疑
+                       .priority = 60}) {}
+
+void PostureAnalyzer::SetBaseline(const Baseline& baseline) {
+  baseline_ = baseline;
+  ResetRules();
+}
+
+void PostureAnalyzer::ResetRules() {
+  shoulder_rule_.Reset();
+  head_down_rule_.Reset();
+  head_tilt_rule_.Reset();
+  too_close_rule_.Reset();
+  hand_face_rule_.Reset();
+}
+
+PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int frame_width,
+                                               int frame_height) const {
+  PostureMetrics m;
+  const float min_conf = cfg_.joint_confidence;
+
+  const Keypoint& nose = person.joints[kNose];
+  const Keypoint& sh_l = person.joints[kShoulderL];
+  const Keypoint& sh_r = person.joints[kShoulderR];
+  const Keypoint& wr_l = person.joints[kWristL];
+  const Keypoint& wr_r = person.joints[kWristR];
+
+  if (!person.JointValid(kNose, min_conf)) {
+    m.invalid_reason = "鼻子关键点不可信";
+    return m;
+  }
+  if (!person.JointValid(kShoulderL, min_conf) || !person.JointValid(kShoulderR, min_conf)) {
+    m.invalid_reason = "肩点不可信（肩部被裁掉或遮挡）";
+    return m;
+  }
+
+  const float sw = Dist(sh_l.x, sh_l.y, sh_r.x, sh_r.y);
+  if (sw < kMinShoulderPx) {
+    m.invalid_reason = "肩宽过小（" + std::to_string(static_cast<int>(sw)) + "px）";
+    return m;
+  }
+
+  const float sx = (sh_l.x + sh_r.x) * 0.5f;
+  const float sy = (sh_l.y + sh_r.y) * 0.5f;
+
+  // §4.2：肩线方向角，atan2(dy, dx)，y 向下
+  m.shoulder_angle_deg =
+      NormalizeLineAngle(std::atan2(sh_r.y - sh_l.y, sh_r.x - sh_l.x) * kRad2Deg);
+  m.shoulder_width_px = sw;
+  if (baseline_.valid) {
+    m.shoulder_dev_deg =
+        LineAngleDelta(m.shoulder_angle_deg, static_cast<float>(baseline_.shoulder_angle_deg));
+  }
+  // §4.3：归一化头肩相对位置
+  m.head_offset_x = (nose.x - sx) / sw;
+  m.head_offset_y = (nose.y - sy) / sw;
+  // 歪头代理量：肩中点 -> 鼻子的连线相对竖直方向的偏角
+  m.head_axis_deg = std::atan2(nose.x - sx, sy - nose.y) * kRad2Deg;
+  m.width_ratio = frame_width > 0 ? sw / static_cast<float>(frame_width) : 0.f;
+
+  // 托腮：两只手腕里离鼻子更近的那个
+  float best = std::numeric_limits<float>::max();
+  bool any_wrist = false;
+  for (const Keypoint* w : {&wr_l, &wr_r}) {
+    if (w->confidence < min_conf) continue;
+    any_wrist = true;
+    const float d = Dist(w->x, w->y, nose.x, nose.y) / sw;
+    if (d < best) best = d;
+  }
+  m.wrist_to_nose = any_wrist ? best : 99.f;
+
+  m.person_confidence = person.person_confidence;
+
+  // ★ 取景门（现场实测补充）：摄像头太低/人太近时鼻子会贴到画面顶部甚至出框，
+  //   此时肩宽、头肩偏移都是被裁掉后的畸形几何。宁可判 UNKNOWN，也不要用它
+  //   校准或报警 —— 否则会得到一个畸形的基准，之后一直误报。
+  const float margin_x = frame_width * 0.02f;
+  const float margin_y = frame_height * 0.02f;
+  const float top_limit = frame_height * 0.03f;
+  if (nose.y < top_limit) {
+    m.invalid_reason = "头顶贴到画面上边缘（摄像头偏低或人太近），请把摄像头抬高";
+    return m;
+  }
+  for (const Keypoint* k : {&sh_l, &sh_r}) {
+    if (k->y < margin_y || k->y > frame_height - margin_y ||
+        k->x < margin_x || k->x > frame_width - margin_x) {
+      m.invalid_reason = "肩部贴边/出框，双肩没完整入画";
+      return m;
+    }
+  }
+  // 鼻子到肩线的距离要有正常比例，太扁说明检测到的不是完整头肩
+  const float head_gap = (sy - nose.y) / sw;
+  if (head_gap < 0.22f) {
+    m.invalid_reason = "头肩比例异常（鼻子离肩线太近），请调整机位";
+    return m;
+  }
+  m.valid = true;
+  return m;
+}
+
+// 几何合理性门：挡住「空场景被判成人」「框到半个身子」这类误判（§11.4）
+bool PostureAnalyzer::Plausible(const PostureMetrics& m, const PersonPose& p,
+                                int frame_width, int frame_height) const {
+  if (!m.valid) return false;
+  if (p.person_confidence < cfg_.pose_confidence) return false;
+
+  // 人体框要有实际面积（防止把噪点当人）
+  const float frame_area = static_cast<float>(frame_width) * frame_height;
+  if (frame_area <= 0.f) return false;
+  if (p.box.w < 32.f || p.box.h < 48.f) return false;
+  if (p.box.Area() < frame_area * 0.01f) return false;
+
+  const float sx = (p.joints[kShoulderL].x + p.joints[kShoulderR].x) * 0.5f;
+  const float sy = (p.joints[kShoulderL].y + p.joints[kShoulderR].y) * 0.5f;
+  const Keypoint& nose = p.joints[kNose];
+
+  // 鼻子必须在肩线之上（正常坐姿 / 站姿的必然几何关系）
+  if (nose.y > sy + 0.15f * m.shoulder_width_px) return false;
+  // 头肩横向偏移不能离谱
+  if (std::fabs(m.head_offset_x) > 2.5f) return false;
+  // 头肩纵向距离应在一个区间内（趴桌时接近 0，站立时更大）
+  if (m.head_offset_y < -2.0f || m.head_offset_y > 0.6f) return false;
+
+  // ROI：主用户必须在配置区域内（§4.1）
+  const float cx = p.box.CenterX() / frame_width;
+  const float cy = p.box.CenterY() / frame_height;
+  if (cx < cfg_.roi_x || cx > cfg_.roi_x + cfg_.roi_w) return false;
+  if (cy < cfg_.roi_y || cy > cfg_.roi_y + cfg_.roi_h) return false;
+
+  (void)sx;
+  return true;
+}
+
+PrimarySelection PostureAnalyzer::SelectPrimary(const std::vector<PersonPose>& persons,
+                                                int frame_width, int frame_height) const {
+  PrimarySelection sel;
+  std::vector<std::pair<float, const PersonPose*>> scored;
+  for (const auto& p : persons) {
+    const PostureMetrics m = ComputeMetrics(p, frame_width, frame_height);
+    if (!Plausible(m, p, frame_width, frame_height)) continue;
+    scored.emplace_back(p.box.Area() * p.person_confidence, &p);
+  }
+  if (scored.empty()) {
+    sel.reason = "画面内没有可信的人体";
+    return sel;
+  }
+  std::sort(scored.begin(), scored.end(),
+            [](const auto& a, const auto& b) { return a.first > b.first; });
+
+  // ★ 先去掉「同一个人被多尺度重复检出」的框。
+  //   w8a8 量化后 conf 通道很粗，同一个人会有好几个高分框，而且中心抖动几十像素，
+  //   IoU 达不到 NMS 阈值。如果不去重，会把一个人判成「多人尺寸接近」而拒绝判定。
+  std::vector<const PersonPose*> cluster;
+  for (const auto& item : scored) {
+    bool duplicate = false;
+    for (const PersonPose* kept : cluster) {
+      const BBox& a = kept->box;
+      const BBox& b = item.second->box;
+      const float ix = std::max(0.f, std::min(a.x + a.w, b.x + b.w) - std::max(a.x, b.x));
+      const float iy = std::max(0.f, std::min(a.y + a.h, b.y + b.h) - std::max(a.y, b.y));
+      const float inter = ix * iy;
+      const float uni = a.Area() + b.Area() - inter;
+      const float iou = uni > 1e-6f ? inter / uni : 0.f;
+      // 中心点很近也算同一个人（量化导致框中心偏移）
+      const float dc = std::hypot(a.CenterX() - b.CenterX(), a.CenterY() - b.CenterY());
+      const float scale = std::max(a.w, b.w);
+      if (iou > 0.35f || (scale > 1.f && dc < scale * 0.35f)) {
+        duplicate = true;
+        break;
+      }
+    }
+    if (!duplicate) cluster.push_back(item.second);
+  }
+  sel.plausible_count = static_cast<int>(cluster.size());
+  sel.person = cluster.front();
+  // §11.4：确实有两个人尺寸接近时不做个体判定，避免混用关键点
+  if (cluster.size() >= 2) {
+    const float a0 = cluster[0]->box.Area() * cluster[0]->person_confidence;
+    const float a1 = cluster[1]->box.Area() * cluster[1]->person_confidence;
+    if (a1 > a0 * 0.45f) {
+      sel.ambiguous = true;
+      sel.reason = "画面内有多人，无法锁定主用户";
+    }
+  }
+  return sel;
+}
+
+bool PostureAnalyzer::CalibrateFeed(const std::vector<PersonPose>& persons, int frame_width,
+                                    int frame_height, PostureMetrics* out_metrics) {
+  const PrimarySelection sel = SelectPrimary(persons, frame_width, frame_height);
+  if (!sel.person || sel.ambiguous) return false;
+  const PostureMetrics m = ComputeMetrics(*sel.person, frame_width, frame_height);
+  if (!m.valid) return false;
+  if (m.person_confidence < cfg_.pose_confidence) return false;
+  if (out_metrics) *out_metrics = m;
+  return true;
+}
+
+PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& persons,
+                                           SteadyTime now, int frame_width, int frame_height) {
+  PostureObservation obs;
+
+  const PrimarySelection sel = SelectPrimary(persons, frame_width, frame_height);
+  if (!sel.person) {
+    last_metrics_ = PostureMetrics{};
+    // 长时间没有有效数据 -> 复位规则，避免用旧异常状态无限延续（§11.3 末尾要求）
+    if (last_valid_at_ && SecondsBetween(*last_valid_at_, now) > cfg_.missing_data_timeout_s) {
+      ResetRules();
+    }
+    obs.state = sel.plausible_count == 0 ? PostureState::kUserAway : PostureState::kUnknown;
+    obs.explanation = sel.reason;
+    return obs;
+  }
+
+  const PostureMetrics m = ComputeMetrics(*sel.person, frame_width, frame_height);
+  if (!Plausible(m, *sel.person, frame_width, frame_height)) {
+    last_metrics_ = PostureMetrics{};
+    if (last_valid_at_ && SecondsBetween(*last_valid_at_, now) > cfg_.missing_data_timeout_s) {
+      ResetRules();
+    }
+    obs.state = PostureState::kUnknown;
+    obs.metrics = m;
+    obs.explanation = m.valid ? "几何特征不合理，丢弃本帧" : m.invalid_reason;
+    return obs;
+  }
+
+  last_metrics_ = m;
+  last_valid_at_ = now;
+  obs.metrics = m;
+
+  if (sel.ambiguous) {
+    // 多人：不做个体判定，但规则计时也被挂起（不给 optional -> 不新增异常）
+    auto r1 = shoulder_rule_.Update(std::nullopt, now);
+    auto r2 = head_down_rule_.Update(std::nullopt, now);
+    auto r3 = head_tilt_rule_.Update(std::nullopt, now);
+    auto r4 = too_close_rule_.Update(std::nullopt, now);
+    auto r5 = hand_face_rule_.Update(std::nullopt, now);
+    if (r1.latched) obs.active_keys.push_back("shoulder_tilt");
+    if (r2.latched) obs.active_keys.push_back("head_down");
+    if (r3.latched) obs.active_keys.push_back("head_tilt");
+    if (r4.latched) obs.active_keys.push_back("too_close");
+    if (r5.latched) obs.active_keys.push_back("hand_on_face");
+    obs.state = PostureState::kUnknown;
+    obs.explanation = sel.reason;
+    return obs;
+  }
+
+  // ---- 特征 -> 规则输入 ----
+  std::optional<float> v_shoulder;
+  std::optional<float> v_head_down;
+  std::optional<float> v_head_tilt;
+  std::optional<float> v_too_close;
+  std::optional<float> v_hand_face;
+
+  // 高低肩需要个人基准；没有基准只能给出「未校准」，不判异常（§4.6）
+  if (baseline_.valid) {
+    v_shoulder = LineAngleDelta(m.shoulder_angle_deg,
+                                static_cast<float>(baseline_.shoulder_angle_deg));
+    const float drop = m.head_offset_y - static_cast<float>(baseline_.head_offset_y);
+    v_head_down = std::max(0.f, drop);
+    v_head_tilt = std::fabs(NormalizeAngle180(
+        m.head_axis_deg - static_cast<float>(baseline_.head_axis_deg)));
+  }
+  v_too_close = m.width_ratio;
+  v_hand_face = m.wrist_to_nose;
+
+  auto r_shoulder = shoulder_rule_.Update(v_shoulder, now);
+  auto r_head_down = head_down_rule_.Update(v_head_down, now);
+  auto r_head_tilt = head_tilt_rule_.Update(v_head_tilt, now);
+  auto r_too_close = too_close_rule_.Update(v_too_close, now);
+  auto r_hand_face = hand_face_rule_.Update(v_hand_face, now);
+
+  auto push = [&](const HoldRule::Result& r, const HoldRule& rule) {
+    if (r.latched) obs.active_keys.push_back(rule.cfg().key);
+    if (r.just_activated) {
+      obs.triggers.push_back(
+          RuleTrigger{rule.cfg().key, rule.cfg().label_zh, r.active_s, rule.cfg().priority});
+    }
+  };
+  push(r_shoulder, shoulder_rule_);
+  push(r_head_down, head_down_rule_);
+  push(r_head_tilt, head_tilt_rule_);
+  push(r_too_close, too_close_rule_);
+  push(r_hand_face, hand_face_rule_);
+
+  // 多规则同时成立时按优先级取主状态（§5.3：合并为一个通知）
+  if (r_hand_face.latched) {
+    obs.state = PostureState::kHandOnFace;
+  } else if (r_head_down.latched) {
+    obs.state = PostureState::kHeadDown;
+  } else if (r_shoulder.latched) {
+    obs.state = PostureState::kShoulderTilt;
+  } else if (r_head_tilt.latched) {
+    obs.state = PostureState::kHeadTilt;
+  } else if (r_too_close.latched) {
+    obs.state = PostureState::kTooClose;
+  } else {
+    obs.state = PostureState::kNormal;
+  }
+
+  if (baseline_.valid) {
+    obs.explanation = std::string(ToChinese(obs.state));
+  } else {
+    obs.explanation = "未校准：只做距离/托腮提示，高低肩与低头不判定";
+    if (obs.state == PostureState::kNormal) obs.state = PostureState::kNormal;
+  }
+  return obs;
+}
+
+}  // namespace posture

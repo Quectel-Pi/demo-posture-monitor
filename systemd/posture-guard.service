@@ -1,0 +1,38 @@
+[Unit]
+Description=RK3576 Posture Guard (坐姿检测 + 护眼提醒后台服务)
+Documentation=file:///opt/posture-guard/docs/architecture.md
+# 摄像头/display 都不需要，只依赖本地多用户环境
+After=multi-user.target local-fs.target
+Wants=multi-user.target
+
+[Service]
+Type=simple
+# 专用系统账号，不给登录权限，也不长期用 root 跑算法（实施方案 §13.2）
+User=posture
+Group=posture
+SupplementaryGroups=video
+ExecStart=/opt/posture-guard/bin/posture_guard --config /etc/posture-guard/posture.yaml --headless
+
+Restart=on-failure
+RestartSec=3
+# 摄像头掉线时进程不会退出（内部指数退避重连），这里的重启只兜底真崩溃
+TimeoutStopSec=10
+
+# /run/posture-guard（socket）与 /var/lib/posture-guard（基线 + 统计）由 systemd 建好并授权，
+# 这样非 root 进程也能写，不用手工 chown
+RuntimeDirectory=posture-guard
+RuntimeDirectoryMode=0755
+StateDirectory=posture-guard
+StateDirectoryMode=0755
+
+# 护眼计时是时间敏感服务，稍微提高一点调度优先级
+Nice=-5
+# 防止内存泄漏把整机拖死（曾经被自己的死循环吃过一次内存）
+MemoryMax=1500M
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=posture-guard
+
+[Install]
+WantedBy=multi-user.target

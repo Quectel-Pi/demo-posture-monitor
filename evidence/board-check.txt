@@ -1,0 +1,19 @@
+=== RK3576 板端环境体检 ===
+  [PASS] 架构                     aarch64 / 64bit
+  [PASS] 内核                     6.1.118-rt36
+  [PASS] 发行版                  Debian GNU/Linux 13 (trixie)
+  [PASS] 编译工具链            g++ 14, cmake 3.31.6
+  [PASS] OpenCV                     4.10.0
+  [PASS] librknnrt                  /lib/librknnrt.so
+  [WARN] rknpu 设备节点         /dev/rknpu 不存在（驱动可能编进内核，先用 demo 实测）
+  [PASS] rknpu 驱动               rknpu 0.9.8
+  [PASS] rknn_api.h                 /userdata/build-src/vendor/rknn/rknn_api.h
+  [PASS] pose 模型                yolov8n-pose.rknn 7.1M sha256=5c25db4f6ac4fb99
+  [PASS] USB UVC 摄像头          /dev/v4l/by-id/usb-icSpring_icspring_camera-video-index0 (icspring camera: icspring camer)
+  [PASS] 可用分辨率档数      1
+  [PASS] 可执行文件            /opt/posture-guard/bin/posture_guard
+  [PASS] 配置文件               /etc/posture-guard/posture.yaml
+  [PASS] 服务账号               posture (uid=999)
+  [PASS] 图形会话               用户 quectel 已在 seat0 登录
+
+==== 汇总：PASS=15  WARN=1  FAIL=0 ====

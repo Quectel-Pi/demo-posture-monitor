@@ -1,3 +1,0 @@
-day: [('2026-10-28', 273.0, 86.5, 0)]
-violation: [('head_tilt', 2.8), ('lean_forward', 10.1)]
-event: []

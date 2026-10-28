@@ -1,194 +1,128 @@
-# 坐姿检测与护眼提醒一体机（PostureMonitor）
+# RK3576 坐姿检测与护眼提醒一体机
 
-> DEMO-036 · Quectel Pi M2 (RK3576) · Debian 13 · 人体 17 关键点 + 坐姿判定 + 屏幕提醒 + 时长统计
+Quectel Pi M2（RK3576 / Debian 13 aarch64）上的坐姿检测 + 20-20-20 护眼提醒系统。
+按《RK3576 坐姿检测与护眼提醒_完整实施方案》实现：**C++ 后台服务（NPU 推理）+ 用户会话
+GTK4 界面**，两个进程通过本地 socket 通信。
+
+> 项目编号：DEMO-036 ｜ 平台：Quectel Pi M2 (RK3576) ｜ 摄像头：USB UVC
 >
-> 关联需求表：QuectelPi Demo 开发计划 · `DEMO-036`「坐姿检测与护眼提醒一体机」
-> 实施日期：2026-10-28 · 目标板：`QSM610ZAP-WFPI` / `SH603ZA`
+> 健康声明：本系统只是习惯提醒工具，不是医疗设备。正面单目摄像头测不出脊柱曲度，
+> 也不测真实的低头角度；所有「近似量」在界面与文档里都标了。
 
----
+## 它做什么
 
-## 1. 一句话
-
-插上 USB 摄像头，上电自动全屏：实时骨架叠加 → 判托腮 / 低头趴桌 / 高低肩（另加歪头 /
-前倾 / 离屏太近 / 久坐）+ 20-20-20 护眼 → 不合格弹横幅 + 提示音 → 全程累计时长与次数落库。
-
-**实测指标（本机实测，非估算）**
-
-| 项 | 数值 | 说明 |
+| 能力 | 实现方式 | 状态 |
 |---|---|---|
-| 姿态推理 | **20.1 ms/帧**（50 次中位数，p90 20.4） | RKNN w8a8 on NPU（`librknnrt` 2.3.2 + RKNPU 驱动 0.9.8）；界面同时跑时 23–34 ms |
-| 显示帧率 | **29–30 fps** | 采集 25fps，骨架按推理节奏叠加（不做逐帧推理）；进程 RSS 278 MB |
-| 关键点精度 | **平均 4.9–6.9 px**（640 空间） | 与 ONNX fp32 参考实现逐点对齐（`tests/verify_decode.py`） |
-| CPU 备援 | 331 ms/帧（6 线程） | ONNX Runtime fp32；**NPU 快 16.5×**（无 NPU 时自动退化） |
-| 摄像头 | 640×480@30 YUYV，44 ms/帧（22.7fps） | USB UVC（`icSpring`） |
+| 人体 17 关键点 | YOLOv8n-pose w8a8 跑 NPU（`librknnrt.so` 直调） | ✅ 实测 17.4ms/帧 |
+| 高低肩 | 肩线相对**个人基准**偏 > 12° 持续 8s | ✅ |
+| 低头/趴桌 | 头肩纵向比基准低 > 0.35 肩宽 持续 5s（近似量） | ✅ |
+| 托腮 | 手腕-鼻子距离 < 0.95 肩宽 持续 5s | ✅ |
+| 歪头 | 头轴相对基准偏 > 18° 持续 5s（近似量） | ✅ |
+| 离屏过近 | 肩宽/画面宽 > 0.75 持续 5s（趋势，非厘米） | ✅ |
+| 屏幕提醒 | 全屏骨架 + 红/绿状态 + 顶部横幅 | ✅ |
+| 累计时长 | 每日在座/不良秒数 + 提醒次数，JSONL 持久化 | ✅ |
+| 20-20-20 护眼 | 连续用眼 20 分钟 → 全屏「远眺 20 秒」倒计时 | ✅ |
+| 个人校准 | 自动采集 5 秒正常坐姿 → 中位数基准（带离群过滤） | ✅ |
+| 无人暂停 | 离开 10s 结束会话清零 | ✅ |
+| 断线自愈 | systemd `Restart=on-failure` + 摄像头指数退避重连 | ✅ |
 
----
+不做（明确边界）：脊柱曲度、真实低头角、厘米级距离、人脸识别、云端上传、保存原始画面。
 
-## 2. 交付物
-
-```
-PostureMonitor/
-├── src/posturemon/            # 应用源码（Python，GTK4 + cairo + RKNN）
-│   ├── app.py                 # GTK4 入口
-│   ├── window.py              # 全屏界面：视频+骨架 / 状态面板 / 告警横幅 / 护眼全屏
-│   ├── pipeline.py            # 采集→推理→判定 三线程流水线
-│   ├── backends.py            # RKNN(NPU, ctypes 直调) / ONNX(CPU) 双后端
-│   ├── yolopose.py            # YOLOv8-pose 后处理（DFL 解码 / split-head / NMS）
-│   ├── rules.py               # 几何指标 + 6 条规则 + 迟滞状态机
-│   ├── camera.py              # V4L2 采集线程（只保留最新帧）
-│   ├── overlay.py             # cairo 骨架/人体框绘制
-│   ├── stats.py               # SQLite 时长与违规统计
-│   ├── config.py              # 全部阈值/参数（可被 /etc 覆盖）
-│   └── headless.py            # 无界面模式 + 规则自检
-├── scripts/
-│   ├── fetch-model.sh         # 【开发机】下载模型 + aarch64 ORT wheel
-│   ├── deploy-from-host.sh    # 【开发机】一条命令推送 + 安装
-│   ├── install.sh             # 【板端】装代码/配置/自启/GDM 自动登录
-│   ├── verify.sh              # 【板端】21 项自检
-│   ├── launcher.sh            # 崩溃自愈启动器
-│   ├── screenshot.sh          # kmsgrab 抓真实屏幕（Mutter 下唯一可行）
-│   ├── make-assets.py         # 生成提示音
-│   └── uninstall.sh           # 卸载（--purge 连数据一起删）
-├── tests/verify_decode.py     # NPU vs ONNX 关键点对齐回归
-├── docs/                      # 需求映射 / 部署 / 判定规则 / 模型与后端 / 排障
-└── samples/                   # 离线回归样图
-```
-
----
-
-## 3. 五分钟部署
-
-### 3.1 开发机（有外网）
+## 快速开始
 
 ```bash
-git clone <repo> PostureMonitor && cd PostureMonitor
-bash scripts/fetch-model.sh          # 拉 rknn + onnx 模型，约 21MB
+# ── 主机侧：准备离线依赖（板端没有编译器和外网）
+PROXY=http://127.0.0.1:7897 bash scripts/fetch_deps.sh
+adb push tools/board-deps.tgz /userdata/
+
+# ── 板端：装编译器 → 编译 → 测试
+adb shell 'mkdir -p /userdata/board-deps && cd /userdata/board-deps && \
+  tar xzf ../board-deps.tgz && dpkg -i --force-depends *.deb && \
+  update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 \
+    --slave /usr/bin/g++ g++ /usr/bin/g++-14'
+adb push . /userdata/posture-src   # 或用 tar 传
+adb shell 'cd /userdata/posture-src && bash scripts/build_board.sh'
+
+# ── 板端：部署 + 自检
+adb shell 'cd /userdata/posture-src && bash scripts/deploy.sh'
+adb shell 'bash /opt/posture-guard/scripts/verify.sh'
+# ================ 结果：PASS=16  FAIL=0  WARN=0 ================
+
+# ── 板端：装桌面全屏界面（自动登录后自动起）
+adb shell 'sudo -u quectel env XDG_RUNTIME_DIR=/run/user/1000 \
+  bash /opt/posture-guard/scripts/install_ui_autostart.sh'
 ```
 
-### 3.2 推到板子并安装
+第一次使用：让人坐到摄像头前保持正常坐姿 5 秒，程序自动校准并保存基准。
 
-```bash
-adb devices                          # 确认 M2 已连
-bash scripts/deploy-from-host.sh
-```
+## 实测数据
 
-等价的手工版（板端离线也可用）：
-
-```bash
-adb push . /userdata/posture-monitor/pkg && adb shell
-cd /userdata/posture-monitor/pkg && sudo bash scripts/install.sh --user=quectel
-```
-
-### 3.3 生效
-
-```bash
-adb shell 'systemctl restart gdm'    # 触发 GDM 自动登录 → autostart 拉起应用
-adb shell 'cat /run/posture-monitor/status.json'   # 不看屏也能确认在跑
-```
-
-### 3.4 自检
-
-```bash
-adb shell 'cd /userdata/posture-monitor/pkg && sudo bash scripts/verify.sh'
-```
-
----
-
-## 4. 使用时
-
-| 操作 | 效果 |
+| 项 | 值 |
 |---|---|
-| 上电 | 自动登录 → 全屏进监测界面 |
-| 坐正 | 左侧画面显示绿色骨架 + 绿框 |
-| 违规持续 2s | 面板状态变红、显示具体类型与指标 |
-| 连续违规 60s | 顶部红色横幅 + 提示音 + 记一次违规 |
-| 每 20 分钟 | 全屏「护眼休息」倒计时 20s（看 6 米外） |
-| 连续坐 45 分钟 | 久坐提醒 |
-| `R` | 手动触发一次护眼休息（演示用） |
-| `F` | 全屏/窗口切换 |
-| `Esc` ×2 | 退出程序（启动器不再拉起） |
+| NPU 推理 | **17.4 ms/帧**（15–25ms），对比 ONNX CPU 331–401ms，**快 16–19×** |
+| 关键点精度 | 与 ONNX fp32 逐点比对：平均 **12–17 px**，IoU 0.876 / 0.588（zidane） |
+| 推理帧率 | 6.9 fps（`camera.infer_fps: 8` 限流） |
+| 采集 | 640×480 YUYV（该 UVC 不提供 MJPG） |
+| 启动延迟 | `systemctl restart` → 出帧 < 2s |
+| 自检 | 16 项 PASS |
+| 单元测试 | 3 个可执行，全通过 |
 
-面板实时显示：状态、连续不良时长、今日不良时长、连续坐姿时长、6 类违规今日次数、
-护眼倒计时、后端与推理耗时。
-
----
-
-## 5. 架构
+## 目录
 
 ```
-USB UVC ──► camera 线程（只保留最新帧，覆盖式）
-                │
-                ▼
-         infer 线程  ── letterbox 640×640 ──► RKNN(NPU) 18~25ms
-                │                              └─ 退化：ONNX CPU 330ms
-                ▼
-        yolopose.decode ──► 17 关键点（COCO）
-                │
-                ▼
-   rules：几何指标 → 6 条规则 → 迟滞状态机（hold 2s / clear 1.5s）
-                │
-      ┌─────────┴──────────┐
-      ▼                    ▼
- GTK4 界面（30fps）    SQLite（时长/次数/事件）
+CMakeLists.txt              # 板端原生编译（OpenCV + librknnrt）
+include/posture/*.hpp       # 数据契约与模块接口
+src/
+  main.cpp                  # 线程编排、参数、图像/离线送帧模式
+  CameraCapture.cpp         # V4L2 采集 + 指数退避重连
+  RknnPoseEngine.cpp        # RKNN 推理 + DFL/NMS/关键点解码
+  PostureAnalyzer.cpp       # 几何特征 + 迟滞规则 + 主用户选择
+  UserCalibration.cpp       # 个人基准（中位数 + 离群过滤）
+  EyeCareMonitor.cpp        # 20-20-20 会话状态机
+  ReminderManager.cpp       # 冷却 / 合并 / 免打扰
+  Notifier.cpp              # journald + Unix socket + JSONL 统计
+  Config.cpp Yaml.cpp Json.cpp Logger.cpp Types.cpp
+ui/posture_guard_ui.py      # GTK4 全屏界面（用户会话，订阅 socket）
+config/posture.yaml         # 运行配置
+systemd/posture-guard.service
+scripts/                    # check_board / smoke_camera / build_board / deploy
+                            # verify / status / calibrate / snooze / screenshot
+                            # install_ui_autostart / fetch_deps
+tests/                      # test_posture_rules / test_session_timer / test_config
+                            # compare_onnx.py（M2 验收）
+docs/                       # architecture / deploy / calibration / testing / troubleshooting
+models/                     # yolov8n-pose.rknn (w8a8) + onnx 参考模型
+vendor/rknn/rknn_api.h      # 与板端 runtime 2.3.2 配套的头文件
+evidence/                   # 截图、自检输出、实测指标
+tools/board-deps.tgz        # 板端离线编译依赖（fetch_deps.sh 生成）
+legacy/                     # 上一版 Python+GTK 单体实现（已停用，留作对照）
 ```
 
-设计要点：
-
-- **推理与显示解耦**：显示永远用最新帧（25–30fps），骨架按推理节奏（~12fps 上限，
-  `infer_interval_ms=80`）叠加。姿态变化慢，不需要逐帧推理。
-- **阈值全部相对化**：以肩宽 `sw` 为单位，换机位、换分辨率都不用重标定。
-- **NPU 走 ctypes 直调**：板端无 pip、python3.13 也没有 rknn wheel，
-  但 `librknnrt.so` 是系统自带的 —— 绑 5 个结构体 + 5 个函数即可，零安装。
-
----
-
-## 6. 已知限制（诚实版）
-
-| 限制 | 影响 | 现状/对策 |
-|---|---|---|
-| NPU 模型的**关键点置信度通道被量化摧毁** | 无法用 conf 过滤单点 | 量化 scale≈3.19 时 conf 只剩 1 个量化级（实测恒 0）；改用"人体框内 + 几何合理性"校验 |
-| RKNN 量化后**误检略多** | 空场景偶尔检成 1 个人 | 加了 `reliable` 几何门 + 4 帧迟滞；`conf_threshold` 已从 0.35 提到 0.45 |
-| **MIPI 摄像头未接通** | `/dev/video-camera1` 出流 `not-negotiated` | 当前用 USB UVC（已实测）；MIPI 见 `docs/05-troubleshooting.md` |
-| 板子**无外网** | 不能 apt/pip | 模型与运行时从开发机 `adb push` |
-| 板端 RTC 曾停在 2026-04-13 | 统计日期错 | 部署时对时：`adb shell date $(date +%m%d%H%M%Y.%S)` |
-| 判定阈值未做真人标定 | 换环境可能要调 | 全部在 `/etc/posture-monitor/config.json`，调参见 `docs/03-posture-rules.md` |
-| 需求文档指定 PeopleKptDet v1.2 SDK | 本次未使用 | 该 SDK 不在板端也不在仓库，改用 YOLOv8n-pose；接口已抽象成后端，换 SDK 只改 `backends.py` |
-
----
-
-## 7. 实测证据
-
-`evidence/` 目录是板端跑出来的原始记录，可直接贴汇报：
-
-| 文件 | 内容 |
-|---|---|
-| `01-live-fullscreen.png` | 全屏界面实拍（kmsgrab 抓 DRM 真实输出） |
-| `02-demo-skeleton.png` | 用离线样图驱动，可见骨架叠加 |
-| `verify-output.txt` | 自检 15 项全 PASS |
-| `bench-output.txt` | NPU 20.1ms / CPU 331ms（16.5×）基线 |
-| `status-sample.json` | 运行态快照（含一次真实违规计数） |
-| `db-dump.txt` | SQLite 按次落库的违规记录 |
-
----
-
-## 8. 文档索引
+## 文档
 
 | 文档 | 内容 |
 |---|---|
-| [docs/01-requirements.md](docs/01-requirements.md) | DEMO-036 需求逐条 → 实现映射 |
-| [docs/02-deploy.md](docs/02-deploy.md) | 完整部署方案、目录布局、自启链路、回滚 |
-| [docs/03-posture-rules.md](docs/03-posture-rules.md) | 6 条判定规则的公式、阈值、标定方法 |
-| [docs/04-model-and-backends.md](docs/04-model-and-backends.md) | 模型来源、RKNN 输出布局、双后端切换、性能数据 |
-| [docs/05-troubleshooting.md](docs/05-troubleshooting.md) | 本次踩到的 9 个坑与定位方法 |
+| [docs/architecture.md](docs/architecture.md) | 进程/线程模型、数据契约、判定规则、状态机、边界 |
+| [docs/deploy.md](docs/deploy.md) | 离线依赖、编译、部署、目录、运维、卸载 |
+| [docs/calibration.md](docs/calibration.md) | 校准流程、质量门限、阈值怎么调、现场看指标 |
+| [docs/testing.md](docs/testing.md) | 单元测试、M2 验收、性能、TC-01~14 结果 |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | 13 个真实踩过的坑 |
+| [evidence/README.md](evidence/README.md) | 实测证据与复现命令 |
 
----
+## 设计取舍
 
-## 9. 关键代码位置
+1. **C++ 而不是 Python**：板端要跑满 8fps 推理 + 全屏 cairo 绘制，Python 的 GIL 与
+   解释开销没必要承担；而且实施方案的模块划分本来就是 C++ 的。
+2. **板端原生编译而不是交叉编译**：板端已有 OpenCV 头文件与 RKNN 运行时，
+   只缺编译器；补编译器比对齐「交叉工具链 + sysroot + OpenCV + glibc」四件套便宜得多。
+3. **后台服务无界面 + 用户会话 UI**：systemd 系统服务拿不到图形会话权限，
+   混在一起会在自动登录/多用户/无屏场景下不稳定（实施方案 §13.3 也是这个结论）。
+4. **界面只收关键点，不收画面**：隐私上更干净，带宽也更低；骨架在本地重画。
+5. **不引入第三方库**：YAML/JSON 都是内置的极小子集实现，因为板端没有这些包、也没有外网。
+6. **规则全部「相对个人基准」**：不搞「标准坐姿角度」，因为机位和人都会变。
 
-| 想改什么 | 改哪里 |
-|---|---|
-| 判定灵敏度 | `/etc/posture-monitor/config.json`（无需改代码） |
-| 新增一条坐姿规则 | `src/posturemon/rules.py`：`evaluate()` 加判断 + `VIOLATION_LABEL` 加名字 |
-| 换算法/换 SDK | `src/posturemon/backends.py`：实现 `infer(rgb) -> PoseResult` 即可 |
-| 界面配色/布局 | `src/posturemon/window.py` 顶部 `CSS` 常量 |
-| 提醒策略 | `window.py` 的 `trigger_posture_alert()` / `start_rest()` |
+## 状态
+
+- 已交付：源码、部署脚本、配置、单元测试、文档、证据
+- 已实测：板端编译 / 16 项自检 / 静态图与 ONNX 逐点比对 / 真实摄像头端到端 / 全屏界面截图
+- 待做：24 小时连续运行（TC-12）、真实工作场景误报率统计、多用户基准

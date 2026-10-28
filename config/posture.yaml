@@ -1,0 +1,72 @@
+# RK3576 坐姿检测与护眼提醒 —— 运行配置
+#
+# 依据：《RK3576 坐姿检测与护眼提醒_完整实施方案》§12
+# 注意：下面所有阈值都是「工程初始值」，不是人体工学规范。
+#       换机位 / 换人 / 换摄像头后必须重新校准（docs/calibration.md）。
+version: 1
+
+camera:
+  # 板端 UVC 节点不一定是 video0：用 scripts/smoke_camera.sh 查实际节点，
+  # 优先写 /dev/v4l/by-id/... 稳定路径（热插拔后不换号）
+  device: "/dev/video73"
+  width: 640
+  height: 480
+  capture_fps: 20
+  infer_fps: 8
+  preferred_pixel_format: "MJPEG"
+  reconnect_backoff_s: 1.0
+  reconnect_backoff_max_s: 15.0
+
+models:
+  pose: "/opt/posture-guard/models/yolov8n-pose.rknn"
+  pose_confidence: 0.45
+  joint_confidence: 0.45
+  nms_iou: 0.45
+
+user:
+  roi: [0.10, 0.05, 0.80, 0.90]      # 归一化 x,y,w,h：主用户必须在框内
+  calibration_duration_s: 5
+  baseline_file: "/var/lib/posture-guard/baseline.json"
+  calibrate_on_start: false          # true = 每次启动都重新校准
+
+posture:
+  # ---- 高低肩（§4.2，V1 核心规则）----
+  shoulder_trigger_deg: 12
+  shoulder_recover_deg: 8
+  shoulder_hold_s: 8
+  recovery_hold_s: 3
+  missing_data_timeout_s: 1.5
+
+  # ---- 以下三项是「单目近似量」，不是真实角度（§4.3/§4.4/§4.5）----
+  head_down_drop: 0.35               # 头肩纵向偏移相对基准的下降量（单位：肩宽）
+  head_down_hold_s: 5
+  head_tilt_deg: 18                  # 肩中点-鼻子连线相对基准的偏角
+  head_tilt_hold_s: 5
+  too_close_ratio: 0.75              # 肩宽 / 画面宽；本机实测坐近约 0.78
+  too_close_hold_s: 5
+  hand_face_ratio: 0.95              # 手腕-鼻子距离 / 肩宽，小于该值视为托腮
+  hand_face_hold_s: 5
+
+eye_care:
+  continuous_use_s: 1200             # 20 分钟（20-20-20 规则）
+  far_look_s: 20
+  presence_confirm_s: 2
+  absent_confirm_s: 10
+  reminder_policy: "manual_ack_or_session_reset"   # 或 auto_restart
+
+notification:
+  cooldown_s: 60
+  headless_log: true
+  desktop_popup: false
+  voice: false
+
+privacy:
+  save_raw_video: false              # 硬性要求：true 会拒绝启动
+  save_face_images: false            # 同上
+  log_keypoints: false
+  retain_statistics_days: 30
+
+runtime:
+  status_socket: "/run/posture-guard/status.sock"
+  state_dir: "/var/lib/posture-guard"
+  stats_dir: "/var/lib/posture-guard/stats"

@@ -1,0 +1,6 @@
+present=True  state=HEAD_DOWN    dev=  4.5 head_oy=-0.353 axis=  42.5 wr=0.085 w2n= 1.46 lat=17.2ms fps=6.9 kp=True
+present=True  state=HEAD_DOWN    dev=  4.5 head_oy=-0.471 axis=  34.5 wr=0.085 w2n= 2.01 lat=17.0ms fps=6.9 kp=True
+present=True  state=HEAD_DOWN    dev=  4.5 head_oy=-0.316 axis=  47.3 wr=0.095 w2n= 1.15 lat=18.6ms fps=6.6 kp=True
+present=True  state=HEAD_DOWN    dev=  4.5 head_oy=-0.353 axis=  30.3 wr=0.085 w2n= 1.36 lat=17.1ms fps=6.6 kp=True
+present=False state=USER_AWAY    dev=  0.0 head_oy= 0.000 axis=   0.0 wr=0.000 w2n= 0.00 lat=18.4ms fps=6.9 kp=False
+present=True  state=HEAD_DOWN    dev=  9.6 head_oy=-0.338 axis= -55.8 wr=0.391 w2n= 1.01 lat=18.5ms fps=6.6 kp=True

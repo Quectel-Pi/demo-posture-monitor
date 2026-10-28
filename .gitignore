@@ -1,3 +1,7 @@
+build/
+build-*/
+tools/board-deps.tgz
 __pycache__/
 *.pyc
-evidence/*.log
+posture_guard_out.png
+*.tmp

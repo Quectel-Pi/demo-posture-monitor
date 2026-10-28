@@ -1,214 +1,206 @@
-#!/bin/bash
-# verify.sh — 板端自检。不改任何东西，只读 + 跑短时推理。
-#   sudo bash scripts/verify.sh            # 全项
-#   sudo bash scripts/verify.sh --no-cam   # 跳过摄像头/端到端（无摄像头时）
+#!/usr/bin/env bash
+# 部署自检：验证「服务在跑 + 真的在推理 + 状态可读 + 统计落盘」
+#
+# 用法：bash scripts/verify.sh [--json]
+# 退出码：0 = 无 FAIL；1 = 有 FAIL
 set -uo pipefail
 
-APP_DIR=/opt/posture-monitor
-DATA_DIR=/userdata/posture-monitor/data
-CONF=/etc/posture-monitor/config.json
-LOG_DIR=/userdata/posture-monitor/log
-SKIP_CAM=0
-[ "${1:-}" = "--no-cam" ] && SKIP_CAM=1
+SOCKET="${SOCKET:-/run/posture-guard/status.sock}"
+SERVICE="${SERVICE:-posture-guard}"
+CONF="${CONF:-/etc/posture-guard/posture.yaml}"
+PREFIX="${PREFIX:-/opt/posture-guard}"
+STATE="${STATE:-/var/lib/posture-guard}"
+JSON=0
+[[ "${1:-}" == "--json" ]] && JSON=1
 
-unset DISPLAY WAYLAND_DISPLAY 2>/dev/null || true
-STATUS=/run/posture-monitor/status.json
-APP_PID=$(pgrep -f "^python3 -m posturemon" | head -1)
-APP_RUNNING=0
-[ -n "${APP_PID:-}" ] && APP_RUNNING=1
-
-PASS=0; FAIL=0; WARN=0
-res() {  # $1=级别 $2=名称 $3=细节
-    case "$1" in
-        PASS) PASS=$((PASS+1)); printf "  \033[1;32m[PASS]\033[0m %-34s %s\n" "$2" "$3" ;;
-        FAIL) FAIL=$((FAIL+1)); printf "  \033[1;31m[FAIL]\033[0m %-34s %s\n" "$2" "$3" ;;
-        WARN) WARN=$((WARN+1)); printf "  \033[1;33m[WARN]\033[0m %-34s %s\n" "$2" "$3" ;;
-    esac
+ok=0; warn=0; fail=0
+declare -a LINES=()
+add() {
+  local level="$1" name="$2" detail="$3"
+  case "$level" in PASS) ok=$((ok+1));; WARN) warn=$((warn+1));; FAIL) fail=$((fail+1));; esac
+  LINES+=("${level}|${name}|${detail}")
+  [[ $JSON -eq 0 ]] && printf '  [%-4s] %-24s %s\n' "$level" "$name" "$detail"
+  return 0
 }
 
-echo "== 1. 系统与依赖 =="
-python3 - <<'PY'
-import sys
-sys.path.insert(0, "/opt/posture-monitor")
-import cv2, numpy, sqlite3
-import gi
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk
-import cairo
-print(f"  python {sys.version.split()[0]} | cv2 {cv2.__version__} | numpy {numpy.__version__}")
-print(f"  Gtk {Gtk.get_major_version()}.{Gtk.get_minor_version()} | pycairo {cairo.version}")
-PY
-[ $? -eq 0 ] && res PASS "python 运行时依赖" "cv2/gi/cairo/sqlite3 齐全" || res FAIL "python 运行时依赖" "见上"
+[[ $JSON -eq 0 ]] && echo "=== posture-guard 自检 ==="
 
-if [ -f /usr/lib/librknnrt.so ]; then
-    VER=$(python3 -c "
-data=open('/usr/lib/librknnrt.so','rb').read()
-import re
-m=re.search(rb'librknnrt version: ([0-9.]+)', data)
-print(m.group(1).decode() if m else 'unknown')")
-    res PASS "librknnrt.so" "version $VER"
+# ---- 1. 服务状态 ----
+if systemctl is-active "$SERVICE" >/dev/null 2>&1; then
+  pid="$(systemctl show -p MainPID --value "$SERVICE" 2>/dev/null)"
+  add PASS "服务运行中" "pid $pid"
 else
-    res WARN "librknnrt.so" "缺失，只能用 ONNX CPU 后端"
+  add FAIL "服务运行中" "$(systemctl is-active "$SERVICE" 2>&1)"
+fi
+if systemctl is-enabled "$SERVICE" >/dev/null 2>&1; then
+  add PASS "开机自启" "enabled"
+else
+  add FAIL "开机自启" "未 enable（重启不会自己起来）"
 fi
 
-echo "== 2. 模型与后端 =="
-[ -f "$APP_DIR/models/yolov8n-pose-rknn.rknn" ] && res PASS "RKNN 模型" "$(du -h "$APP_DIR/models/yolov8n-pose-rknn.rknn" | cut -f1)" || res FAIL "RKNN 模型" "缺失"
-[ -f "$APP_DIR/models/yolov8n-pose.onnx" ] && res PASS "ONNX 备援模型" "$(du -h "$APP_DIR/models/yolov8n-pose.onnx" | cut -f1)" || res WARN "ONNX 备援模型" "缺失（NPU 挂了就没退路）"
+# ---- 2. 账号与权限 ----
+if id posture >/dev/null 2>&1; then
+  groups="$(id -nG posture)"
+  if [[ "$groups" == *video* ]]; then
+    add PASS "服务账号" "posture，组: $groups"
+  else
+    add FAIL "服务账号" "posture 不在 video 组，打不开摄像头"
+  fi
+else
+  add FAIL "服务账号" "posture 用户不存在"
+fi
 
-python3 - <<'PY'
-import sys, time
-sys.path.insert(0, "/opt/posture-monitor")
-import numpy as np
-from posturemon import backends, config
-cfg = config.Config.load()
+# ---- 3. 配置与模型 ----
+if [[ -f "$CONF" ]]; then
+  if out="$("$PREFIX/bin/posture_guard" --config "$CONF" --print-config 2>&1)"; then
+    add PASS "配置可解析" "$(echo "$out" | head -1)"
+  else
+    add FAIL "配置可解析" "$(echo "$out" | tail -2 | tr '\n' ' ')"
+  fi
+else
+  add FAIL "配置可解析" "缺少 $CONF"
+fi
+model="$PREFIX/models/yolov8n-pose.rknn"
+if [[ -f "$model" ]]; then
+  add PASS "模型就位" "$model ($(du -h "$model" | cut -f1), sha256 $(sha256sum "$model" | cut -c1-16))"
+else
+  add FAIL "模型就位" "缺少 $model"
+fi
+
+# ---- 4. NPU runtime ----
+# /usr/lib/librknnrt.so 通常没进 ldconfig 缓存（裸 .so 没有 soname 版本号），
+# 所以既查缓存也直接找文件，否则会误报
+rknn_path="$(ldconfig -p 2>/dev/null | awk '/librknnrt/{print $NF; exit}')"
+[[ -n "$rknn_path" ]] || rknn_path="$(find /usr/lib /usr/local/lib /lib /opt -maxdepth 3 -name 'librknnrt.so*' 2>/dev/null | head -1)"
+if [[ -n "$rknn_path" ]]; then
+  add PASS "librknnrt" "$rknn_path"
+else
+  add FAIL "librknnrt" "系统里找不到（NPU 不可用）"
+fi
+
+# ---- 5. 状态 socket + 内容 ----
+if [[ -S "$SOCKET" ]]; then
+  add PASS "状态 socket" "$SOCKET"
+  status="$(timeout 5 python3 - "$SOCKET" <<'PY' 2>/dev/null
+import json, socket, sys
+path = sys.argv[1]
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(4)
+s.connect(path)
+buf = b""
+while b"\n" not in buf:
+    chunk = s.recv(4096)
+    if not chunk:
+        break
+    buf += chunk
+line = buf.split(b"\n")[0]
+d = json.loads(line.decode())
+print(json.dumps(d, ensure_ascii=False))
+PY
+)"
+  if [[ -n "$status" ]]; then
+    add PASS "状态可读" "$(echo "$status" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["posture_state"], d["posture_state_zh"])' 2>/dev/null)"
+    backend="$(echo "$status" | python3 -c 'import json,sys;print(json.load(sys.stdin)["backend"])' 2>/dev/null)"
+    [[ "$backend" == "rknn" ]] && add PASS "推理后端" "rknn(NPU)" || add FAIL "推理后端" "$backend（期望 rknn）"
+    lat="$(echo "$status" | python3 -c 'import json,sys;print(json.load(sys.stdin)["latency_ms"])' 2>/dev/null)"
+    lat_i="${lat%.*}"
+    if [[ -n "$lat_i" && "$lat_i" -lt 200 ]]; then
+      add PASS "推理耗时" "${lat} ms/帧（NPU，目标 <200ms）"
+    elif [[ -n "$lat_i" && "$lat_i" -lt 500 ]]; then
+      add WARN "推理耗时" "${lat} ms/帧，偏慢（看看是否在跑 CPU 后端）"
+    else
+      add FAIL "推理耗时" "${lat} ms/帧，远超目标"
+    fi
+    fps="$(echo "$status" | python3 -c 'import json,sys;print(json.load(sys.stdin)["fps"])' 2>/dev/null)"
+    fx="${fps%.*}"; fx="${fx:-0}"
+    if [[ "$fx" -ge 4 ]]; then
+      add PASS "推理帧率" "${fps} fps（配置上限 camera.infer_fps）"
+    else
+      add WARN "推理帧率" "${fps} fps，低于 4"
+    fi
+    fid="$(echo "$status" | python3 -c 'import json,sys;print(json.load(sys.stdin)["frame_id"])' 2>/dev/null)"
+    sleep 1.5
+    status2="$(timeout 5 python3 - "$SOCKET" <<'PY' 2>/dev/null
+import json, socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(4); s.connect(sys.argv[1])
+buf = b""
+while b"\n" not in buf:
+    c = s.recv(4096)
+    if not c: break
+    buf += c
+print(json.dumps(json.loads(buf.split(b"\n")[0].decode()), ensure_ascii=False))
+PY
+)"
+    fid2="$(echo "$status2" | python3 -c 'import json,sys;print(json.load(sys.stdin)["frame_id"])' 2>/dev/null)"
+    if [[ -n "$fid" && -n "$fid2" && "$fid2" -gt "$fid" ]]; then
+      add PASS "出帧中" "frame_id $fid -> $fid2"
+    else
+      add FAIL "出帧中" "frame_id 没增长（$fid -> $fid2）：摄像头打不开或推理卡住"
+    fi
+    echo "$status2" > /tmp/posture-status.json
+  else
+    add FAIL "状态可读" "socket 存在但读不到 JSON（服务卡住？）"
+  fi
+else
+  add FAIL "状态 socket" "$SOCKET 不存在"
+fi
+
+# ---- 6. 统计与基线 ----
+stats_today="$STATE/stats/stats-$(date +%F).jsonl"
+if [[ -f "$stats_today" ]]; then
+  add PASS "统计落盘" "$(basename "$stats_today") ($(wc -l < "$stats_today") 行)"
+else
+  add WARN "统计落盘" "今天的统计文件还没生成（服务刚起需要 10s）"
+fi
+if [[ -f "$STATE/baseline.json" ]]; then
+  add PASS "校准基线" "$(python3 -c "
+import json,sys
 try:
-    be, desc = backends.make_backend(cfg)
+    d=json.load(open('$STATE/baseline.json'))
+    print('肩线基准 %.1f°, 样本 %d 帧, 建立于 %s' % (d['shoulder_angle_deg'], d['samples'], d['created_at']))
 except Exception as e:
-    print(f"  BACKEND_FAIL {e}"); sys.exit(1)
-img = np.random.randint(0, 255, (be.in_h, be.in_w, 3), dtype=np.uint8)
-be.infer(img)
-ts = []
-for _ in range(5):
-    t = time.perf_counter(); be.infer(img); ts.append((time.perf_counter() - t) * 1000)
-ts.sort()
-print(f"  BACKEND {desc} input={be.in_h}x{be.in_w} sdk={be.sdk} median={ts[2]:.1f}ms")
-PY
-if [ $? -eq 0 ]; then res PASS "推理后端可加载" "见上"; else res FAIL "推理后端可加载" "后端初始化/推理失败"; fi
-
-echo "== 3. 坐姿判定规则（合成关键点自检）=="
-PYTHONPATH=$APP_DIR python3 -m posturemon.headless --selftest-rules >/tmp/pm_rules.txt 2>&1
-if [ $? -eq 0 ]; then
-    res PASS "6 条规则状态机" "$(grep -c PASS /tmp/pm_rules.txt) 项通过"
+    print('解析失败:', e)
+")"
 else
-    res FAIL "6 条规则状态机" "见 /tmp/pm_rules.txt"
-    sed -n '1,20p' /tmp/pm_rules.txt
+  add WARN "校准基线" "还没有 baseline.json（有人坐在镜头前 5 秒会自动校准）"
 fi
 
-echo "== 4. 摄像头 =="
-# UVC 同一时刻只允许一个进程打开。应用在跑时就由 status.json 佐证（fps/latency/persons），
-# 不再重复抢占设备 —— 否则一定报"打不开"，那是假故障。
-if [ "$SKIP_CAM" = 1 ]; then
-    res WARN "摄像头" "已按 --no-cam 跳过"
-elif [ "$APP_RUNNING" = 1 ] && [ -s "$STATUS" ]; then
-    DEV=$(python3 -c "
-import sys; sys.path.insert(0,'/opt/posture-monitor')
-from posturemon.camera import list_cameras
-d=list_cameras(); print(d[0] if d else '')")
-    [ -n "$DEV" ] && res PASS "摄像头设备" "$DEV" || res FAIL "摄像头设备" "没有 /dev/v4l/by-id/*video-index0"
-    python3 - <<'PY2'
-import json, os, sys, time
-st = json.load(open("/run/posture-monitor/status.json"))
-age = time.time() - st.get("ts", 0)
-fps = st.get("fps") or 0
-lat = st.get("latency_ms") or 0
-ok = age < 5 and fps > 5 and lat > 0
-print(("PASS " if ok else "FAIL ") +
-      f"应用独占中：fps={fps} 推理={lat}ms 人员={st.get('persons')} "
-      f"状态={'在座' if st.get('present') else '无人'} 快照{age:.1f}s前")
-sys.exit(0 if ok else 1)
-PY2
-    if [ $? -eq 0 ]; then
-        res PASS "摄像头出帧（应用内）" "$(python3 -c "
-import json;st=json.load(open('$STATUS'));print(f\"fps={st['fps']} 推理={st['latency_ms']}ms\")" 2>/dev/null)"
-    else
-        res FAIL "摄像头出帧（应用内）" "status.json 过期或 fps=0（见 $STATUS）"
-    fi
-else
-    DEV=$(python3 -c "
-import sys; sys.path.insert(0,'/opt/posture-monitor')
-from posturemon.camera import list_cameras
-d=list_cameras(); print(d[0] if d else '')")
-    if [ -z "$DEV" ]; then
-        res FAIL "摄像头设备" "没有 /dev/v4l/by-id/*video-index0"
-    else
-        res PASS "摄像头设备" "$DEV"
-        OUT=$(DEV="$DEV" python3 - <<'PY3'
-import os, sys, time
-sys.path.insert(0, "/opt/posture-monitor")
-import cv2
-dev = os.environ["DEV"]
-cap = cv2.VideoCapture(dev, cv2.CAP_V4L2)
-if not cap.isOpened():
-    print("FAIL 打不开（可能被其它进程独占）"); sys.exit(0)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640); cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-ts = []
-for i in range(10):
-    t = time.perf_counter(); ok, f = cap.read()
-    if ok and i >= 2:
-        ts.append((time.perf_counter() - t) * 1000)
-cap.release()
-if not ts:
-    print("FAIL 读不到帧"); sys.exit(0)
-ts.sort()
-print(f"PASS {f.shape[1]}x{f.shape[0]} median={ts[len(ts)//2]:.0f}ms")
-PY3
-)
-        case "$OUT" in
-            PASS*) res PASS "摄像头出帧" "${OUT#PASS }" ;;
-            *)     res FAIL "摄像头出帧" "${OUT#FAIL }" ;;
-        esac
-    fi
+# ---- 7. 日志健康 ----
+if command -v journalctl >/dev/null; then
+  errs="$(journalctl -u "$SERVICE" --since '-10min' --no-pager 2>/dev/null | grep -c 'ERROR' || true)"
+  if [[ "${errs:-0}" -eq 0 ]]; then
+    add PASS "近 10 分钟无 ERROR" "0 条"
+  else
+    add WARN "近 10 分钟无 ERROR" "$errs 条，看 journalctl -u $SERVICE"
+  fi
 fi
 
-echo "== 5. 端到端（真实推理 + 判定）=="
-if [ "$SKIP_CAM" = 1 ]; then
-    res WARN "端到端" "跳过"
-elif [ "$APP_RUNNING" = 1 ] && [ -s "$STATUS" ]; then
-    python3 - <<'PY4'
-import json, sys
-st = json.load(open("/run/posture-monitor/status.json"))
-ok = st.get("backend", "").startswith("rknn") or st.get("backend", "").startswith("onnx")
-print(("PASS " if ok else "FAIL ") +
-      f"{st['backend']} | 推理 {st['latency_ms']}ms | 人员={st['persons']} | "
-      f"在座={st['present']} | 不良={st['bad']}{('('+st['label']+')') if st['label'] else ''} | "
-      f"今日不良={st['today_bad_s']}s")
-sys.exit(0 if ok else 1)
-PY4
-    [ $? -eq 0 ] && res PASS "端到端推理（应用内）" "见上" || res FAIL "端到端推理（应用内）" "见上"
+# ---- 8. 单元测试（有源码目录时）----
+if [[ -d "$(dirname "${BASH_SOURCE[0]}")/../build" ]]; then
+  if ctest --test-dir "$(dirname "${BASH_SOURCE[0]}")/../build" >/dev/null 2>&1; then
+    add PASS "单元测试" "ctest 全通过"
+  else
+    add FAIL "单元测试" "ctest 有失败项"
+  fi
+fi
+if [[ -x /opt/posture-guard/ui/posture_guard_ui.py || -f /opt/posture-guard/ui/posture_guard_ui.py ]]; then
+  add PASS "桌面界面" "/opt/posture-guard/ui/posture_guard_ui.py"
 else
-    PYTHONPATH=$APP_DIR timeout 40 python3 -m posturemon.headless --seconds 6 --quiet >/tmp/pm_e2e.txt 2>&1
-    if [ $? -eq 0 ]; then
-        python3 - <<'PY5'
-import json
-d = json.load(open("/tmp/pm_e2e.txt"))
-print(f"PASS {d['backend']} | 推理 {d['infer_count']} 次 | {d['latency_ms']}ms | 人员={d['persons']}")
-PY5
-        res PASS "端到端推理" "$(tail -1 /tmp/pm_e2e.txt | cut -c1-60)"
-    else
-        res FAIL "端到端推理" "见 /tmp/pm_e2e.txt"
-        tail -6 /tmp/pm_e2e.txt
-    fi
+  add WARN "桌面界面" "未安装 UI"
 fi
 
-echo "== 6. 安装状态 =="
-[ -d "$APP_DIR/posturemon" ] && res PASS "代码目录" "$APP_DIR/posturemon" || res FAIL "代码目录" "缺失"
-[ -f "$CONF" ] && res PASS "配置文件" "$CONF" || res WARN "配置文件" "缺失（用内置默认值）"
-DB_PATH=$(python3 -c "
-import json
-try: print(json.load(open('$CONF'))['db_path'])
-except Exception: print('$DATA_DIR/posture.db')" 2>/dev/null)
-if [ -f "$DB_PATH" ]; then
-    N=$(python3 -c "
-import sqlite3
-c=sqlite3.connect('$DB_PATH')
-print(c.execute('select count(*) from violation').fetchone()[0])" 2>/dev/null || echo 0)
-    res PASS "统计数据库" "$DB_PATH（违规记录 $N 条）"
+if [[ $JSON -eq 1 ]]; then
+  printf '{"pass":%d,"warn":%d,"fail":%d,"items":[' "$ok" "$warn" "$fail"
+  first=1
+  for line in "${LINES[@]}"; do
+    IFS='|' read -r level name detail <<< "$line"
+    [[ $first -eq 0 ]] && printf ','
+    first=0
+    printf '{"level":"%s","name":"%s","detail":"%s"}' "$level" "$name" "${detail//\"/\\\"}"
+  done
+  printf ']}\n'
 else
-    res WARN "统计数据库" "还没有（首次运行后生成）"
+  echo
+  echo "================ 结果：PASS=$ok  FAIL=$fail  WARN=$warn ================"
 fi
-
-AUTOSTART=$(ls /home/*/.config/autostart/posture-monitor.desktop 2>/dev/null | head -1)
-[ -n "$AUTOSTART" ] && res PASS "开机自启" "$AUTOSTART" || res WARN "开机自启" "未注册"
-grep -q "AutomaticLoginEnable=true" /etc/gdm3/daemon.conf 2>/dev/null \
-    && res PASS "GDM 自动登录" "$(grep AutomaticLogin= /etc/gdm3/daemon.conf | head -1)" \
-    || res WARN "GDM 自动登录" "未开启（重启后停在登录页）"
-
-if pgrep -f "posturemon" >/dev/null 2>&1; then
-    res PASS "进程运行中" "pid $(pgrep -f 'python3 -m posturemon' | tr '\n' ' ')"
-else
-    res WARN "进程运行中" "没在跑（登录桌面后自动起，或手动 $APP_DIR/../run.sh）"
-fi
-
-echo
-echo "================ 结果：PASS=$PASS  FAIL=$FAIL  WARN=$WARN ================"
-[ "$FAIL" -eq 0 ] || exit 1
+[[ $fail -eq 0 ]]

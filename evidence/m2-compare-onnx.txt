@@ -1,0 +1,28 @@
+### vs ONNX fp32 —— zidane.jpg
+ONNX 参考 2 人 / C++(RKNN) 2 人  （RKNN runtime 2.3.2 (429f97ae6b@2025-04-09T09:09:27) / drv 0.9.8）
+  匹配 IoU=0.876 score=0.904  平均误差 17.8px  最大 26.6px
+  匹配 IoU=0.588 score=0.889  平均误差 16.6px  最大 33.1px
+
+匹配率 100%   关键点平均误差 17.2px   P90 26.6px   最大 33.1px
+=> M2 验收: PASS
+
+### vs ONNX fp32 —— bus.jpg
+ONNX 参考 3 人 / C++(RKNN) 8 人  （RKNN runtime 2.3.2 (429f97ae6b@2025-04-09T09:09:27) / drv 0.9.8）
+  匹配 IoU=0.510 score=0.889  平均误差 19.0px  最大 27.1px
+  匹配 IoU=0.532 score=0.872  平均误差 15.4px  最大 21.1px
+  匹配 IoU=0.361 score=0.853  平均误差 9.6px  最大 21.7px
+  匹配 IoU=0.706 score=0.853  平均误差 16.4px  最大 33.5px
+  匹配 IoU=0.492 score=0.853  平均误差 18.8px  最大 39.6px
+  匹配 IoU=0.442 score=0.832  平均误差 10.0px  最大 38.4px
+  匹配 IoU=0.333 score=0.754  平均误差 20.9px  最大 47.3px
+  匹配 IoU=0.484 score=0.690  平均误差 27.6px  最大 70.0px
+
+匹配率 100%   关键点平均误差 17.2px   P90 27.0px   最大 70.0px
+=> M2 验收: PASS
+
+### vs ONNX fp32 —— 现场真实帧
+ONNX 参考 1 人 / C++(RKNN) 1 人  （RKNN runtime 2.3.2 (429f97ae6b@2025-04-09T09:09:27) / drv 0.9.8）
+  匹配 IoU=0.709 score=0.754  平均误差 12.0px  最大 38.5px
+
+匹配率 100%   关键点平均误差 12.0px   P90 27.3px   最大 38.5px
+=> M2 验收: PASS
