@@ -60,6 +60,7 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
   c.missing_data_timeout_s = static_cast<float>(
       yaml.Num("posture.missing_data_timeout_s", c.missing_data_timeout_s));
 
+  c.min_head_gap = static_cast<float>(yaml.Num("posture.min_head_gap", c.min_head_gap));
   c.head_down_drop = static_cast<float>(yaml.Num("posture.head_down_drop", c.head_down_drop));
   c.head_down_hold_s =
       static_cast<float>(yaml.Num("posture.head_down_hold_s", c.head_down_hold_s));

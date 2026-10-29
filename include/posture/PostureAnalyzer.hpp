@@ -91,6 +91,16 @@ class PostureAnalyzer {
   const PostureMetrics& last_metrics() const { return last_metrics_; }
   void ResetRules();
 
+  // 检测「当前画面」和「校准基准」是否还对应同一个机位/距离。
+  //
+  // 为什么需要：BaselineMatches() 只能比对 camera_id / 分辨率 / 模型 SHA256，
+  // 这些都不变时（典型情况：人把摄像头挪了位置，摄像头还是同一个），
+  // 它会认为基准有效，于是继续拿旧基准判定 —— 所有阈值都算错。
+  // width_ratio（肩宽占画面宽）对「人-摄像头距离」最敏感，是这里的主力判据。
+  //
+  // 返回空字符串 = 一致；非空 = 漂移原因（可直接给用户看）。
+  std::string CheckBaselineDrift(const PostureMetrics& m) const;
+
   // 归一化直线角到 [-90, 90)，两条线的方向差再折叠一次（§4.2 强调的周期折叠）
   static float NormalizeLineAngle(float deg);
   static float LineAngleDelta(float current, float baseline);

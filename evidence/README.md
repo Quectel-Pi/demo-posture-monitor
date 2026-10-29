@@ -13,6 +13,8 @@
 | `status-sample.json` | 一帧完整状态快照（socket 原始 JSON） | 字段齐全，可直接给 UI 或外部消费 |
 | `focus-measurements.txt` | 焦距扫描 / AF 对比 / A-B 实测原始数据 | 锁定 70 相对设备默认 160 清晰度 **1.87×** |
 | `03-ui-focus-locked.png` | 锁定焦距后的界面截图 | 画面区 Laplacian 555、160923 色 |
+| `04-ui-topdown-camera.png` | 俯视机位（摄像头在显示器上方）下的界面截图 | 画面区 179817 色 |
+| `topdown-camera-fixes.txt` | 俯视机位三连问题的完整实测数据与修复记录 | 误报清零、校准 28 帧一次通过 |
 
 ## 关键数字
 

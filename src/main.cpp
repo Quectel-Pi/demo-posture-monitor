@@ -20,6 +20,8 @@
 #include <thread>
 #include <vector>
 
+#include <algorithm>
+
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
@@ -465,6 +467,11 @@ int main(int argc, char** argv) {
     snapshot.roi_w = cfg.roi_w;
     snapshot.roi_h = cfg.roi_h;
     double last_notification_at = -1.0;
+    // 启动后的基准一致性检查：收够样本后比对一次「当前画面 vs 校准基准」。
+    // 只做一次，避免用户中途换个坐姿就被反复判为漂移。
+    std::vector<double> drift_wr;
+    std::vector<double> drift_oy;
+    bool drift_checked = false;
     double last_video_ms = 0.0;
     std::uint64_t video_seq = 0;
     std::vector<unsigned char> video_jpeg;
@@ -505,6 +512,21 @@ int main(int argc, char** argv) {
 
       const PostureObservation obs =
           analyzer.Update(persons, now, frame.width, frame.height);
+
+      // 被几何闸门拒掉的帧要能看见原因，否则"校准采样不足"根本没法排查。
+      // 限流 5s 一条，避免刷屏。
+      if (!obs.metrics.valid && obs.state != PostureState::kUserAway) {
+        static double last_reject_log = 0.0;
+        const double t = SteadyNowMs();
+        if (t - last_reject_log > 5000.0) {
+          last_reject_log = t;
+          // 原因在 explanation 里：几何闸门拒（有 invalid_reason）和
+          // 「选不出主用户」（Plausible 拒）两条路径都会写进 explanation
+          LOG_WARN("本帧几何不可用：",
+                   obs.explanation.empty() ? "（未给出原因）" : obs.explanation,
+                   "  检出 ", persons.size(), " 人");
+        }
+      }
 
       // ---- 主用户是否在座（用于护眼计时）----
       // UNKNOWN 且有人入镜时仍算在座：只是姿态判不出来，人确实在
@@ -547,6 +569,45 @@ int main(int argc, char** argv) {
         }
       }
 
+      // ---- 基准一致性检查（挪了摄像头/换了距离时必须重新校准）----
+      // 只做一次：收够 20 个有效样本后取中位数，与校准基准比对。
+      // 为什么必须做：BaselineMatches() 只能比 camera_id/分辨率/模型 SHA256，
+      // 摄像头没换但位置变了时它认为基准有效，于是所有阈值都算偏。
+      if (analyzer.HasBaseline() && !calibration.active()) {
+        if (!drift_checked) {
+          if (obs.metrics.valid && obs.state != PostureState::kUserAway) {
+            drift_wr.push_back(obs.metrics.width_ratio);
+            drift_oy.push_back(obs.metrics.head_offset_y);
+            if (drift_wr.size() >= 20) {
+              drift_checked = true;
+              std::vector<double> wr = drift_wr, oy = drift_oy;
+              std::sort(wr.begin(), wr.end());
+              std::sort(oy.begin(), oy.end());
+              PostureMetrics probe = obs.metrics;
+              probe.width_ratio = static_cast<float>(wr[wr.size() / 2]);
+              probe.head_offset_y = static_cast<float>(oy[oy.size() / 2]);
+              const std::string why = analyzer.CheckBaselineDrift(probe);
+              if (!why.empty()) {
+                LOG_WARN("校准基准已失效：", why);
+                LOG_WARN("旧基准会让所有阈值都算偏，现作废并自动重新校准");
+                std::remove(cfg.baseline_file.c_str());
+                analyzer.SetBaseline(Baseline{});
+                calibration.Start(now, camera.DeviceId(), frame.width, frame.height,
+                                  engine->model_sha256());
+              } else {
+                LOG_INFO("校准基准与当前画面对得上（肩宽占比 ",
+                         static_cast<double>(probe.width_ratio), "），继续使用");
+              }
+            }
+          }
+        }
+      } else if (!analyzer.HasBaseline()) {
+        // 没有基准：等校准完成后再武装检查
+        drift_wr.clear();
+        drift_oy.clear();
+        drift_checked = false;
+      }
+
       // ---- 自动校准：有基准就不做；没基准且确认在座则自动开始 ----
       if (!analyzer.HasBaseline() && !calibration.active() && auto_calibrate_armed &&
           obs.state != PostureState::kUserAway && obs.state != PostureState::kUnknown) {
@@ -563,7 +624,8 @@ int main(int argc, char** argv) {
         if (analyzer.CalibrateFeed(persons, frame.width, frame.height, &probe)) {
           Baseline fresh;
           std::string message;
-          const auto result = calibration.Feed(probe, now, &fresh, &message);
+          const auto result = calibration.Feed(probe, now, &fresh, &message,
+                                               calibration.min_samples());
           if (result == UserCalibration::FeedResult::kDone) {
             if (UserCalibration::SaveBaseline(cfg.baseline_file, fresh, &err)) {
               LOG_INFO(message, "；基准已保存到 ", cfg.baseline_file);

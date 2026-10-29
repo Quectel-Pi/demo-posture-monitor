@@ -113,7 +113,13 @@ struct PostureMetrics {
   float head_offset_y = 0.f;             // (鼻子Y - 肩中点Y) / 肩宽
   float width_ratio = 0.f;               // 肩宽 / 画面宽（距离启发式）
   float wrist_to_nose = 0.f;             // 手腕到鼻子距离 / 肩宽（托腮）
-  float head_axis_deg = 0.f;             // 肩中点->鼻子 连线相对竖直方向的偏角（歪头代理量）
+  // 歪头判据：左右耳连线相对水平的角度。
+  // 不用「肩中点->鼻子」的偏角 —— 俯视机位下 sy-nose.y 很小（分母趋零），
+  // 横向一点点噪声就把角度放大几十度，实测波动 ±50°，完全不可用。
+  // 耳线是一条横跨头部的基线，和肩线同样稳定（实测波动 6°）。
+  float ear_angle_deg = 0.f;
+  bool ear_angle_valid = false;
+  float head_axis_deg = 0.f;             // 仅诊断用（俯视下不稳定，不参与判定）
   float person_confidence = 0.f;
   std::string invalid_reason;
 };
@@ -141,6 +147,8 @@ struct Baseline {
   double head_offset_x = 0.0;
   double head_offset_y = 0.0;
   double head_axis_deg = 0.0;
+  double ear_angle_deg = 0.0;
+  bool ear_angle_valid = false;   // 校准时耳朵是否可信（不可信则不用耳线判歪头）
   double width_ratio = 0.0;
   int samples = 0;
   int frame_width = 0;

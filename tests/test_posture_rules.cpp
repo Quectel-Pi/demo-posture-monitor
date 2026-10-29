@@ -155,6 +155,99 @@ void TestMetricsAndPlausibility() {
   Check(sel2.ambiguous, "两人尺寸接近时标记 ambiguous");
 }
 
+void TestTopDownCamera() {
+  std::printf("-- 俯视机位（摄像头装在显示器上方往��拍）\n");
+  Config cfg;
+  cfg.joint_confidence = 0.4f;
+  cfg.pose_confidence = 0.4f;
+  cfg.min_head_gap = 0.08f;
+  Baseline baseline;
+  baseline.valid = true;
+  baseline.shoulder_angle_deg = 0.0;
+  baseline.head_offset_y = -0.20;      // 俯视下头肩纵向本来就小
+  baseline.ear_angle_valid = true;
+  baseline.ear_angle_deg = 0.0;
+  PostureAnalyzer analyzer(cfg, baseline);
+
+  // 俯视下典型的合格帧：鼻子离肩线只有 0.25 个肩宽（直视机位会是 0.6+）
+  PersonPose p{};
+  p.person_confidence = 0.9f;
+  p.box = BBox{180, 100, 300, 340};
+  p.joints[kShoulderL] = Keypoint{250, 300, 0.9f};
+  p.joints[kShoulderR] = Keypoint{410, 302, 0.9f};
+  p.joints[kNose] = Keypoint{330, 220, 0.9f};      // (300-220)/160 = 0.5 → 通过
+  p.joints[kEarL] = Keypoint{290, 205, 0.9f};
+  p.joints[kEarR] = Keypoint{372, 207, 0.9f};
+  p.joints[kWristL] = Keypoint{250, 460, 0.9f};    // 手在桌面（肩线 300 之下）
+  p.joints[kWristR] = Keypoint{400, 462, 0.9f};
+
+  PostureMetrics m = analyzer.ComputeMetrics(p, 640, 480);
+  Check(m.valid, "俯视机位下 head_gap 偏小不会被误判为不可用");
+  Check(m.ear_angle_valid, "双耳可信时算出耳线角");
+  Check(std::fabs(m.ear_angle_deg) < 3.0f, "耳线接近水平（0°）");
+
+  // ★ 手在桌面：手腕低于肩线 → 绝不能判托腮
+  Check(m.wrist_to_nose > 90.f, "手放桌面（腕低于肩线）时 wrist_to_nose 置 99，不判托腮");
+
+  // 真托腮：手抬到脸旁
+  PersonPose face_p = p;
+  face_p.joints[kWristL] = Keypoint{315, 235, 0.9f};   // 贴近鼻子
+  const PostureMetrics fm = analyzer.ComputeMetrics(face_p, 640, 480);
+  Check(fm.wrist_to_nose < 0.95f, "手抬到脸旁（腕高于肩线）时能识别托腮候选");
+
+  // 歪头：耳线倾斜 25° → 应该超过 18° 阈值
+  PersonPose tilt_p = p;
+  tilt_p.joints[kEarL] = Keypoint{290, 190, 0.9f};     // 左耳抬高
+  tilt_p.joints[kEarR] = Keypoint{372, 232, 0.9f};     // 右耳压低
+  const PostureMetrics tm = analyzer.ComputeMetrics(tilt_p, 640, 480);
+  Check(tm.ear_angle_valid, "歪头时耳线有效");
+  const float dev = PostureAnalyzer::LineAngleDelta(tm.ear_angle_deg,
+                                                    static_cast<float>(baseline.ear_angle_deg));
+  Check(dev > cfg.head_tilt_deg, "耳线偏 " + std::to_string(static_cast<int>(dev)) +
+                                 "° 超过阈值 " + std::to_string(static_cast<int>(cfg.head_tilt_deg)) + "°");
+
+  // 低头：鼻子压到肩线上 → 应该判低头，而不是"几何不可用"
+  PersonPose down_p = p;
+  down_p.joints[kNose] = Keypoint{330, 285, 0.9f};     // head_gap=(300-285)/160≈0.09... 需 >0.08
+  const PostureMetrics dm = analyzer.ComputeMetrics(down_p, 640, 480);
+  Check(dm.valid, "低头帧仍被当作有效数据（不能丢）");
+  const float drop = dm.head_offset_y - static_cast<float>(baseline.head_offset_y);
+  Check(drop > 0.0f, "低头时头肩纵向相对基准确实减小（drop=" +
+                     std::to_string(drop).substr(0, 5) + "）");
+
+  // 关键点明显错检（鼻子和肩线重叠）→ 才判不可用
+  PersonPose bad_p = p;
+  bad_p.joints[kNose] = Keypoint{330, 299, 0.9f};
+  const PostureMetrics bm = analyzer.ComputeMetrics(bad_p, 640, 480);
+  Check(!bm.valid, "鼻子与肩线重叠时判为关键点错检、丢弃");
+}
+
+void TestBaselineDrift() {
+  std::printf("-- 基准漂移检测（挪了摄像头必须重新校准）\n");
+  Config cfg;
+  cfg.joint_confidence = 0.4f;
+  cfg.pose_confidence = 0.4f;
+  Baseline baseline;
+  baseline.valid = true;
+  baseline.width_ratio = 0.11f;        // 校准时的取景（人很远）
+  baseline.head_offset_y = -0.45f;
+  PostureAnalyzer analyzer(cfg, baseline);
+
+  PostureMetrics far = PostureMetrics{};
+  far.valid = true;
+  far.width_ratio = 0.12f;
+  far.head_offset_y = -0.46f;
+  Check(analyzer.CheckBaselineDrift(far).empty(), "取景一致时不报警");
+
+  PostureMetrics near_ = PostureMetrics{};
+  near_.valid = true;
+  near_.width_ratio = 0.40f;           // 挪近后肩宽占比涨到 3.6 倍
+  near_.head_offset_y = -0.20f;
+  const std::string why = analyzer.CheckBaselineDrift(near_);
+  Check(!why.empty(), "取景变化 3.6 倍时报告基准失效");
+  Check(why.find("肩宽占比") != std::string::npos, "原因里说清是取景变了：" + why);
+}
+
 void TestAnalyzerObservation() {
   std::printf("-- 端到端判定（含未校准行为）\n");
   Config cfg;
@@ -222,6 +315,8 @@ int main() {
   TestNormalizeLineAngle();
   TestHoldRule();
   TestMetricsAndPlausibility();
+  TestTopDownCamera();
+  TestBaselineDrift();
   TestAnalyzerObservation();
   if (g_failures == 0) {
     std::printf("=== 全部通过 ===\n");

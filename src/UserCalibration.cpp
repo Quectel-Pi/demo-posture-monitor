@@ -135,6 +135,9 @@ bool UserCalibration::LoadBaseline(const std::string& path, Baseline* out) {
   if (ExtractNumber(text, "samples", &n)) b.samples = static_cast<int>(n);
   if (ExtractNumber(text, "frame_width", &n)) b.frame_width = static_cast<int>(n);
   if (ExtractNumber(text, "frame_height", &n)) b.frame_height = static_cast<int>(n);
+  bool eav = false;
+  if (ExtractBool(text, "ear_angle_valid", &eav)) b.ear_angle_valid = eav;
+  if (ExtractNumber(text, "ear_angle_deg", &v)) b.ear_angle_deg = v;
   ExtractString(text, "camera_id", &b.camera_id);
   ExtractString(text, "model_sha256", &b.model_sha256);
   ExtractString(text, "created_at", &b.created_at);
@@ -155,6 +158,8 @@ bool UserCalibration::SaveBaseline(const std::string& path, const Baseline& base
     }
     Json j;
     j.Bool("valid", true)
+        .Bool("ear_angle_valid", baseline.ear_angle_valid)
+        .Num("ear_angle_deg", baseline.ear_angle_deg, 3)
         .Num("shoulder_angle_deg", baseline.shoulder_angle_deg, 3)
         .Num("head_offset_x", baseline.head_offset_x, 4)
         .Num("head_offset_y", baseline.head_offset_y, 4)
@@ -203,7 +208,8 @@ double UserCalibration::progress(SteadyTime now) const {
 }
 
 UserCalibration::FeedResult UserCalibration::Feed(const PostureMetrics& metrics, SteadyTime now,
-                                                  Baseline* out, std::string* message) {
+                                                  Baseline* out, std::string* message,
+                                                  int min_samples) {
   if (!active_) return FeedResult::kIgnored;
   if (!metrics.valid) {
     if (message) *message = "无效样本：" + metrics.invalid_reason;
@@ -215,7 +221,8 @@ UserCalibration::FeedResult UserCalibration::Feed(const PostureMetrics& metrics,
     return FeedResult::kIgnored;
   }
   samples_.push_back({metrics.shoulder_angle_deg, metrics.head_offset_x,
-                      metrics.head_offset_y, metrics.head_axis_deg, metrics.width_ratio});
+                      metrics.head_offset_y, metrics.head_axis_deg, metrics.width_ratio,
+                      metrics.ear_angle_deg, metrics.ear_angle_valid});
 
   if (elapsed_s(now) < cfg_.calibration_duration_s) {
     if (message) {
@@ -226,7 +233,8 @@ UserCalibration::FeedResult UserCalibration::Feed(const PostureMetrics& metrics,
   }
 
   // 质量门限：样本太少说明画面不稳定，拒绝保存（§4.6 第 4 条）
-  if (samples_.size() < 15) {
+  const size_t need = static_cast<size_t>(std::max(6, min_samples));
+  if (samples_.size() < need) {
     if (message) {
       *message = "校准样本不足（" + std::to_string(samples_.size()) +
                  " 帧），请保持坐姿并确认摄像头画面清晰";
@@ -240,12 +248,14 @@ UserCalibration::FeedResult UserCalibration::Feed(const PostureMetrics& metrics,
   // 取全样本中位数，再丢掉偏离中位数过多的帧（说话、拿东西、转身的瞬间），
   // 用剩下的帧重新取中位数。否则一次伸手就把基准带歪，之后一直误报。
   std::vector<double> angles, ox, oy, axis, ratio;
+  std::vector<double> ears;      // 只有耳朵可信的样本才进这里
   for (const auto& s : samples_) {
     angles.push_back(s.shoulder_angle_deg);
     ox.push_back(s.head_offset_x);
     oy.push_back(s.head_offset_y);
     axis.push_back(s.head_axis_deg);
     ratio.push_back(s.width_ratio);
+    if (s.ear_angle_valid) ears.push_back(s.ear_angle_deg);
   }
   const double med_angle = Median(angles);
   const double med_oy = Median(oy);
@@ -259,7 +269,8 @@ UserCalibration::FeedResult UserCalibration::Feed(const PostureMetrics& metrics,
     if (std::fabs(s.head_axis_deg - med_axis) > 20.0) continue;
     kept.push_back(s);
   }
-  if (kept.size() * 100 < samples_.size() * 55 || kept.size() < 10) {
+  if (kept.size() * 100 < samples_.size() * 50 ||
+      kept.size() < std::max<size_t>(5, need * 2 / 3)) {
     if (message) {
       *message = "校准样本不稳定（" + std::to_string(kept.size()) + "/" +
                  std::to_string(samples_.size()) +
@@ -289,6 +300,9 @@ UserCalibration::FeedResult UserCalibration::Feed(const PostureMetrics& metrics,
   b.frame_height = frame_height_;
   b.camera_id = camera_id_;
   b.model_sha256 = model_sha256_;
+  // 耳线基准：至少一半样本可信才用；否则标记无效，规则层会自动退回头轴角
+  b.ear_angle_valid = !ears.empty() && ears.size() * 2 >= samples_.size();
+  b.ear_angle_deg = b.ear_angle_valid ? Median(ears) : 0.0;
   b.created_at = WallNowString();
 
   active_ = false;

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 
 #include "posture/Logger.hpp"
@@ -160,6 +161,33 @@ void PostureAnalyzer::ResetRules() {
   hand_face_rule_.Reset();
 }
 
+std::string PostureAnalyzer::CheckBaselineDrift(const PostureMetrics& m) const {
+  if (!baseline_.valid || !m.valid) return {};
+  if (baseline_.width_ratio <= 0.001) return {};   // 老基准没记这个字段，跳过检查
+
+  // 距离：肩宽占画面宽的比例。挪动摄像头（远近变化）会让它成倍变化。
+  const double ratio = m.width_ratio / baseline_.width_ratio;
+  if (ratio > 1.8 || ratio < 0.55) {
+    char buf[160];
+    std::snprintf(buf, sizeof(buf),
+                  "画面里肩宽占比 %.2f，校准基准是 %.2f（差 %.1f 倍）——"
+                  "摄像头或人就位变了",
+                  m.width_ratio, baseline_.width_ratio,
+                  ratio >= 1.0 ? ratio : 1.0 / ratio);
+    return buf;
+  }
+  // 头肩纵向偏移：机位高度/俯仰变了会明显偏移
+  const double dy = m.head_offset_y - baseline_.head_offset_y;
+  if (std::fabs(dy) > 0.45) {
+    char buf[160];
+    std::snprintf(buf, sizeof(buf),
+                  "头肩纵向偏移 %.2f，校准基准是 %.2f（差 %.2f 个肩宽）",
+                  m.head_offset_y, baseline_.head_offset_y, dy);
+    return buf;
+  }
+  return {};
+}
+
 PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int frame_width,
                                                int frame_height) const {
   PostureMetrics m;
@@ -202,13 +230,30 @@ PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int fra
   m.head_offset_y = (nose.y - sy) / sw;
   // 歪头代理量：肩中点 -> 鼻子的连线相对竖直方向的偏角
   m.head_axis_deg = std::atan2(nose.x - sx, sy - nose.y) * kRad2Deg;
+
+  // 耳线角（歪头的可靠判据）。两只耳朵都可信时才算。
+  const Keypoint& ear_l = person.joints[kEarL];
+  const Keypoint& ear_r = person.joints[kEarR];
+  if (ear_l.confidence >= min_conf && ear_r.confidence >= min_conf) {
+    const float ear_dist = Dist(ear_l.x, ear_l.y, ear_r.x, ear_r.y);
+    if (ear_dist > sw * 0.35f) {   // 两耳距离太小说明错了
+      m.ear_angle_deg = NormalizeLineAngle(
+          std::atan2(ear_r.y - ear_l.y, ear_r.x - ear_l.x) * kRad2Deg);
+      m.ear_angle_valid = true;
+    }
+  }
   m.width_ratio = frame_width > 0 ? sw / static_cast<float>(frame_width) : 0.f;
 
-  // 托腮：两只手腕里离鼻子更近的那个
+  // 托腮：两只手腕里离鼻子更近的那个。
+  // ★ 但只有「手腕抬到肩线之上」才算 —— 坐在桌前打字时，手在桌面上，
+  //   图像里离胸/脸并不远（俯视机位尤其明显），不加上这个门控会一直误报托腮。
+  //   实测：手放桌面时手腕比肩线低 95~109% 肩宽；托腮时一定高于肩线。
   float best = std::numeric_limits<float>::max();
   bool any_wrist = false;
+  const float wrist_above_limit = sy - sw * 0.10f;   // 留 10% 肩宽容差
   for (const Keypoint* w : {&wr_l, &wr_r}) {
     if (w->confidence < min_conf) continue;
+    if (w->y > wrist_above_limit) continue;          // 手在下方 → 不是托腮
     any_wrist = true;
     const float d = Dist(w->x, w->y, nose.x, nose.y) / sw;
     if (d < best) best = d;
@@ -234,10 +279,12 @@ PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int fra
       return m;
     }
   }
-  // 鼻子到肩线的距离要有正常比例，太扁说明检测到的不是完整头肩
+  // 鼻子到肩线的距离：只做「模型明显检错」的兜底，不做「机位好坏」的判据。
+  // 俯视机位下这个量天然偏小，低头时会进一步压到肩线上 —— 那是要检测的信号，
+  // 不是要丢弃的坏帧（之前设 0.22 把低头帧全扔了，详见 docs/troubleshooting.md）。
   const float head_gap = (sy - nose.y) / sw;
-  if (head_gap < 0.22f) {
-    m.invalid_reason = "头肩比例异常（鼻子离肩线太近），请调整机位";
+  if (head_gap < cfg_.min_head_gap) {
+    m.invalid_reason = "鼻子与肩线重叠（疑似关键点错检）";
     return m;
   }
   m.valid = true;
@@ -433,8 +480,14 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
                                 static_cast<float>(baseline_.shoulder_angle_deg));
     const float drop = m.head_offset_y - static_cast<float>(baseline_.head_offset_y);
     v_head_down = std::max(0.f, drop);
-    v_head_tilt = std::fabs(NormalizeAngle180(
-        m.head_axis_deg - static_cast<float>(baseline_.head_axis_deg)));
+    // 歪头：优先用耳线（稳定）；耳朵不可信时退回旧的头轴角（俯视下会抖，但至少不瞎报）
+    if (m.ear_angle_valid && baseline_.ear_angle_valid) {
+      v_head_tilt = LineAngleDelta(m.ear_angle_deg,
+                                   static_cast<float>(baseline_.ear_angle_deg));
+    } else {
+      v_head_tilt = std::fabs(NormalizeAngle180(
+          m.head_axis_deg - static_cast<float>(baseline_.head_axis_deg)));
+    }
   }
   v_too_close = m.width_ratio;
   v_hand_face = m.wrist_to_nose;

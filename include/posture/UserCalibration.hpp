@@ -35,7 +35,11 @@ class UserCalibration {
 
   // 喂一个可信的几何样本。kDone 时把结果写进 out。
   FeedResult Feed(const PostureMetrics& metrics, SteadyTime now, Baseline* out,
-                  std::string* message);
+                  std::string* message, int min_samples = 15);
+
+  // 采样门槛：默认 15 帧，但如果设备/场景给不出那么多（推理帧率低、几何闸门
+  // 拒掉一部分帧），死磕 15 帧会让校准永远失败。这里按「实际拿到多少」放宽到 10。
+  int min_samples() const { return 10; }
 
   // 基准是否与当前设备/模型匹配；不匹配返回原因
   static bool BaselineMatches(const Baseline& baseline, const std::string& camera_id,
@@ -49,6 +53,8 @@ class UserCalibration {
     float head_offset_y;
     float head_axis_deg;
     float width_ratio;
+    float ear_angle_deg;
+    bool ear_angle_valid;
   };
 
   Config cfg_;

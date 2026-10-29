@@ -242,6 +242,8 @@ std::string Notifier::SerializeStatus(const StatusSnapshot& s) const {
       .Num("shoulder_tilt_dev", s.metrics.shoulder_dev_deg, 1)
       .Num("head_offset_y", s.metrics.head_offset_y, 3)
       .Num("head_axis_deg", s.metrics.head_axis_deg, 1)
+      .Num("ear_angle_deg", s.metrics.ear_angle_deg, 1)
+      .Bool("ear_angle_valid", s.metrics.ear_angle_valid)
       .Num("width_ratio", s.metrics.width_ratio, 3)
       .Num("wrist_to_nose", s.metrics.wrist_to_nose, 2)
       .Str("session_state", s.session_state)
