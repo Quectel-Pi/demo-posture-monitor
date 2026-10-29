@@ -63,7 +63,16 @@ struct Config {
   // 用来挡"模型把鼻子检到肩膀上"这种明显错误，而不是挡正常低头。
   float min_head_gap = 0.08f;
 
-  float head_down_drop = 0.35f;      // head_offset_y 相对校准基准的下降量
+  // 低头阈值：相对「基准头肩距离」的比例。
+  //
+  // 为什么不能用固定绝对值：头肩纵向距离本身随摄像头俯仰角变化很大
+  // （直视机位基准约 -0.9 肩宽，显示器上方俯拍只有 -0.20）。固定的 0.35
+  // 在俯视机位下永远达不到（鼻子压到肩线上最多也就降 0.20），低头检测直接失效。
+  // 用比例就与机位无关：鼻子朝肩线下降了「自己基准距离的 55%」即判明显低头。
+  float head_down_drop_ratio = 0.55f;
+  float head_down_drop_min = 0.10f;  // 比例算出的阈值下限（防噪声）
+  float head_down_drop_max = 0.45f;  // 上限（防直视机位下过于迟钝）
+  float head_down_drop_legacy = 0.35f;   // 兼容旧配置键，仅在没有基准时参考
   float head_down_hold_s = 5.0f;
   float head_tilt_deg = 18.0f;       // 鼻-肩中点连线相对基准的偏角
   float head_tilt_hold_s = 5.0f;

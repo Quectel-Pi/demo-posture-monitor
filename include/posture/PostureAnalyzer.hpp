@@ -40,6 +40,12 @@ class HoldRule {
 
   Result Update(std::optional<float> value, SteadyTime now);
   void Reset();
+  // 运行期调整阈值（低头阈值依赖校准基准，基准变了要跟着变）
+  void SetTrigger(float trigger, float recover) {
+    cfg_.trigger = trigger;
+    cfg_.recover = recover;
+  }
+  float trigger() const { return cfg_.trigger; }
 
   bool latched() const { return latched_; }
   const HoldRuleCfg& cfg() const { return cfg_; }
@@ -70,6 +76,8 @@ class PostureAnalyzer {
   PostureAnalyzer(const Config& cfg, const Baseline& baseline);
 
   void SetBaseline(const Baseline& baseline);
+  // 当前生效的低头阈值（随校准基准自动缩放，供自检/日志展示）
+  float HeadDownThreshold() const;
   bool HasBaseline() const { return baseline_.valid; }
   const Baseline& baseline() const { return baseline_; }
 

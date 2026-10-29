@@ -117,8 +117,8 @@ PostureAnalyzer::PostureAnalyzer(const Config& cfg, const Baseline& baseline)
                       .priority = 40}),
       head_down_rule_({.key = "head_down",
                        .label_zh = "低头/趴桌",
-                       .trigger = cfg.head_down_drop,
-                       .recover = cfg.head_down_drop * 0.5f,
+                       .trigger = cfg.head_down_drop_legacy,   // SetBaseline 后按基准重算
+                       .recover = cfg.head_down_drop_legacy * 0.5f,
                        .hold_s = cfg.head_down_hold_s,
                        .recover_hold_s = cfg.recovery_hold_s,
                        .higher_is_bad = true,
@@ -146,12 +146,32 @@ PostureAnalyzer::PostureAnalyzer(const Config& cfg, const Baseline& baseline)
                        .hold_s = cfg.hand_face_hold_s,
                        .recover_hold_s = cfg.recovery_hold_s,
                        .higher_is_bad = false,   // 距离越小越可疑
-                       .priority = 60}) {}
+                       .priority = 60}) {
+  // 构造时传入的基准也要参与阈值缩放
+  const float drop =
+      (baseline.valid && std::fabs(baseline.head_offset_y) > 0.02)
+          ? std::max(cfg.head_down_drop_min,
+                     std::min(cfg.head_down_drop_max,
+                              cfg.head_down_drop_ratio *
+                                  std::fabs(static_cast<float>(baseline.head_offset_y))))
+          : cfg.head_down_drop_legacy;
+  head_down_rule_.SetTrigger(drop, drop * 0.5f);
+}
 
 void PostureAnalyzer::SetBaseline(const Baseline& baseline) {
   baseline_ = baseline;
+  // 低头阈值随基准的头肩距离缩放：俯视机位基准只有 -0.20 肩宽，
+  // 固定 0.35 的阈值在那里永远达不到（鼻子压到肩线上最多降 0.20）。
+  float drop = cfg_.head_down_drop_legacy;
+  if (baseline_.valid && std::fabs(baseline_.head_offset_y) > 0.02) {
+    drop = cfg_.head_down_drop_ratio * std::fabs(static_cast<float>(baseline_.head_offset_y));
+    drop = std::max(cfg_.head_down_drop_min, std::min(cfg_.head_down_drop_max, drop));
+  }
+  head_down_rule_.SetTrigger(drop, drop * 0.5f);
   ResetRules();
 }
+
+float PostureAnalyzer::HeadDownThreshold() const { return head_down_rule_.trigger(); }
 
 void PostureAnalyzer::ResetRules() {
   shoulder_rule_.Reset();

@@ -61,7 +61,14 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
       yaml.Num("posture.missing_data_timeout_s", c.missing_data_timeout_s));
 
   c.min_head_gap = static_cast<float>(yaml.Num("posture.min_head_gap", c.min_head_gap));
-  c.head_down_drop = static_cast<float>(yaml.Num("posture.head_down_drop", c.head_down_drop));
+  c.head_down_drop_ratio = static_cast<float>(
+      yaml.Num("posture.head_down_drop_ratio", c.head_down_drop_ratio));
+  c.head_down_drop_min = static_cast<float>(
+      yaml.Num("posture.head_down_drop_min", c.head_down_drop_min));
+  c.head_down_drop_max = static_cast<float>(
+      yaml.Num("posture.head_down_drop_max", c.head_down_drop_max));
+  c.head_down_drop_legacy = static_cast<float>(
+      yaml.Num("posture.head_down_drop", c.head_down_drop_legacy));
   c.head_down_hold_s =
       static_cast<float>(yaml.Num("posture.head_down_hold_s", c.head_down_hold_s));
   c.head_tilt_deg = static_cast<float>(yaml.Num("posture.head_tilt_deg", c.head_tilt_deg));
@@ -137,9 +144,10 @@ std::string Config::Describe() const {
   os << "shoulder: trigger=" << shoulder_trigger_deg << "deg recover="
      << shoulder_recover_deg << "deg hold=" << shoulder_hold_s << "s rec_hold="
      << recovery_hold_s << "s missing_timeout=" << missing_data_timeout_s << "s\n";
-  os << "approx: head_down_drop=" << head_down_drop << " head_tilt_deg=" << head_tilt_deg
-     << " too_close_ratio=" << too_close_ratio << " hand_face_ratio=" << hand_face_ratio
-     << "\n";
+  os << "approx: head_down_drop_ratio=" << head_down_drop_ratio << " (min "
+     << head_down_drop_min << " max " << head_down_drop_max << ")"
+     << " head_tilt_deg=" << head_tilt_deg << " too_close_ratio=" << too_close_ratio
+     << " hand_face_ratio=" << hand_face_ratio << "\n";
   os << "eye_care: use=" << continuous_use_s << "s far_look=" << far_look_s
      << "s presence=" << presence_confirm_s << "s absent=" << absent_confirm_s
      << "s policy=" << reminder_policy << "\n";

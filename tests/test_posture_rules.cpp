@@ -215,6 +215,19 @@ void TestTopDownCamera() {
   Check(drop > 0.0f, "低头时头肩纵向相对基准确实减小（drop=" +
                      std::to_string(drop).substr(0, 5) + "）");
 
+  // 低头阈值随基准缩放：俯视基准 -0.20 → 阈值约 0.11（不是固定 0.35）
+  Check(std::fabs(analyzer.HeadDownThreshold() - 0.112f) < 0.02f,
+        "俯视机位低头阈值按基准缩放为 " +
+            std::to_string(analyzer.HeadDownThreshold()).substr(0, 5) + "（固定 0.35 则永远触发不了）");
+
+  // 直视机位基准 -0.9 → 阈值被上限 0.45 截住
+  Baseline far_base;
+  far_base.valid = true;
+  far_base.head_offset_y = -0.9;
+  PostureAnalyzer far_analyzer(cfg, far_base);
+  Check(std::fabs(far_analyzer.HeadDownThreshold() - 0.45f) < 0.01f,
+        "直视机位低头阈值被上限截到 0.45");
+
   // 关键点明显错检（鼻子和肩线重叠）→ 才判不可用
   PersonPose bad_p = p;
   bad_p.joints[kNose] = Keypoint{330, 299, 0.9f};
