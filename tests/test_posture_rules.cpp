@@ -309,6 +309,75 @@ void TestWristGateRelative() {
             + " < 0.95");
 }
 
+void TestFramingGate() {
+  std::printf("-- 取景门：按关键点是否入画判断（不是按人体框位置）\n");
+  Config cfg;
+  cfg.joint_confidence = 0.4f;
+  cfg.pose_confidence = 0.4f;
+  cfg.min_size_ratio = 0.55f;
+  cfg.frame_max_person_w = 0.90f;
+  Baseline b;
+  b.valid = true;
+  b.head_offset_y = -0.30;
+  b.ear_angle_valid = true;
+  b.width_ratio = 0.35;
+  PostureAnalyzer analyzer(cfg, b);
+
+  // nk_y / nk_x：把关键点整体偏移，模拟出框
+  auto person = [](float box_y, float box_h, float box_w,
+                   float kp_dy = 0.f, bool drop_ears = false) {
+    PersonPose p{};
+    p.person_confidence = 0.9f;
+    p.box = BBox{60, box_y, box_w, box_h};
+    p.joints[kShoulderL] = Keypoint{160, 300 + kp_dy, 0.9f};
+    p.joints[kShoulderR] = Keypoint{384, 302 + kp_dy, 0.9f};
+    p.joints[kNose] = Keypoint{270, 200 + kp_dy, 0.9f};
+    p.joints[kEarL] = Keypoint{190, 190 + kp_dy, 0.9f};
+    p.joints[kEarR] = Keypoint{350, 192 + kp_dy, 0.9f};
+    p.joints[kWristL] = Keypoint{180, 430, 0.9f};
+    p.joints[kWristR] = Keypoint{400, 430, 0.9f};
+    if (drop_ears) {   // 模拟耳朵出画
+      p.joints[kEarL] = Keypoint{190, -20, 0.9f};
+      p.joints[kEarR] = Keypoint{350, -18, 0.9f};
+    }
+    return p;
+  };
+
+  // ① 只拍到头的桌面机位：框顶在画面外 -142，但鼻子/耳/肩都在画面内 → 必须通过
+  {
+    std::vector<PersonPose> head_only{person(-142, 470, 224)};
+    const auto sel = analyzer.SelectPrimary(head_only, 640, 480);
+    Check(sel.person != nullptr,
+          "框顶在画面外 -142px 但关键点都在画面内 → 通过（这是桌面机位的常态）");
+  }
+  // ② 框很宽（胳膊张开）不再被拒 —— 框宽不等于肩宽
+  {
+    std::vector<PersonPose> wide{person(20, 330, 600)};
+    const auto sel = analyzer.SelectPrimary(wide, 640, 480);
+    Check(sel.person != nullptr,
+          "框占画面宽 94%（胳膊张开）不拒 —— 双肩关键点在画面里就够了");
+  }
+  // ③ 鼻子出画（关键点上移到 y<0）
+  {
+    std::vector<PersonPose> nose_out{person(20, 330, 224, -260.f)};
+    const auto sel = analyzer.SelectPrimary(nose_out, 640, 480);
+    Check(sel.person == nullptr, "鼻子关键点出画 → 拒绝");
+  }
+  // ④ 耳朵出画：帧仍然可用（低头/凑近/托腮照样能判），只是耳线角不可信
+  {
+    std::vector<PersonPose> ear_out{person(20, 330, 224, 0.f, true)};
+    const auto sel = analyzer.SelectPrimary(ear_out, 640, 480);
+    Check(sel.person != nullptr,
+          "双耳出画不废整帧（只是歪头判不了，别把其它姿势一起拖死）");
+  }
+  // ⑤ 正常取景
+  {
+    std::vector<PersonPose> ok{person(30, 330, 224)};
+    const auto sel = analyzer.SelectPrimary(ok, 640, 480);
+    Check(sel.person != nullptr, "正常取景通过");
+  }
+}
+
 void TestSizeGate() {
   std::printf("-- 尺寸门：人走后椅子被当成人\n");
   Config cfg;
@@ -325,7 +394,7 @@ void TestSizeGate() {
   auto fake = [](float sw_norm, float box_w, float box_h) {
     PersonPose p{};
     p.person_confidence = 0.9f;
-    p.box = BBox{200, 90, box_w, box_h};   // 中心落在 ROI 内
+    p.box = BBox{200, 60, box_w, box_h};   // 中心落在 ROI 内
     p.joints[kShoulderL] = Keypoint{240, 300, 0.9f};
     p.joints[kShoulderR] = Keypoint{240 + sw_norm * 640, 302, 0.9f};
     p.joints[kNose] = Keypoint{240 + sw_norm * 320, 200, 0.9f};
@@ -341,8 +410,8 @@ void TestSizeGate() {
   const auto sel = analyzer.SelectPrimary(blob, 640, 480);
   Check(sel.person == nullptr, "小框假阳性（宽占比 0.12）被尺寸门拒绝 → 判 USER_AWAY");
 
-  // 真用户：宽占比 0.35
-  std::vector<PersonPose> real{fake(0.35f, 380, 470)};
+  // 真用户：宽占比 0.35，占画面高 65%（合格取景）
+  std::vector<PersonPose> real{fake(0.35f, 380, 312)};
   const auto sel2 = analyzer.SelectPrimary(real, 640, 480);
   Check(sel2.person != nullptr, "正常尺寸的用户通过尺寸门");
 }
@@ -457,23 +526,35 @@ void TestBaselineDrift() {
   cfg.pose_confidence = 0.4f;
   Baseline baseline;
   baseline.valid = true;
-  baseline.width_ratio = 0.11f;        // 校准时的取景（人很远）
+  baseline.width_ratio = 0.25f;        // 校准时的取景
   baseline.head_offset_y = -0.45f;
   PostureAnalyzer analyzer(cfg, baseline);
 
   PostureMetrics far = PostureMetrics{};
   far.valid = true;
-  far.width_ratio = 0.12f;
+  far.width_ratio = 0.26f;
   far.head_offset_y = -0.46f;
   Check(analyzer.CheckBaselineDrift(far).empty(), "取景一致时不报警");
 
   PostureMetrics near_ = PostureMetrics{};
   near_.valid = true;
-  near_.width_ratio = 0.40f;           // 挪近后肩宽占比涨到 3.6 倍
+  near_.width_ratio = 0.48f;           // 挪近后肩宽占比涨到 1.9 倍
   near_.head_offset_y = -0.20f;
   const std::string why = analyzer.CheckBaselineDrift(near_);
-  Check(!why.empty(), "取景变化 3.6 倍时报告基准失效");
+  Check(!why.empty(), "取景变化 1.9 倍时报告基准失效");
   Check(why.find("肩宽占比") != std::string::npos, "原因里说清是取景变了：" + why);
+
+  // 历史坏基准（宽占比 0.07）必须被判失效 —— 只看倍数会漏掉
+  Baseline bad = baseline;
+  bad.width_ratio = 0.07f;
+  PostureAnalyzer bad_analyzer(cfg, bad);
+  PostureMetrics normal_m = PostureMetrics{};
+  normal_m.valid = true;
+  normal_m.width_ratio = 0.36f;
+  normal_m.head_offset_y = -0.45f;
+  const std::string why2 = bad_analyzer.CheckBaselineDrift(normal_m);
+  Check(!why2.empty() && why2.find("不合理") != std::string::npos,
+        "基准宽占比 0.07 直接被判失效：" + why2);
 }
 
 void TestAnalyzerObservation() {
@@ -545,6 +626,7 @@ int main() {
   TestMetricsAndPlausibility();
   TestTopDownCamera();
   TestWristGateRelative();
+  TestFramingGate();
   TestSizeGate();
   TestSmoothing();
   TestTooCloseRelative();

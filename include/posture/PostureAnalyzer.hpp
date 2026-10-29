@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "posture/Config.hpp"
+#include "posture/PostureProfile.hpp"
 #include "posture/Types.hpp"
 
 namespace posture {
@@ -71,6 +72,9 @@ struct PrimarySelection {
   // 有检出但全被几何闸门拒掉时，这里放「最像人那个」被拒的原因，
   // 用于把「无人」和「有人但机位不对」区分开（否则用户只会看到"无人"）。
   std::string reject_reason;
+  // 拒因分类：现场需要用同一类原因做稳定反馈，不能每帧换一种说法
+  enum RejectKind { kRejectNone = 0, kRejectHeadcut, kRejectTooBig, kRejectGeometry };
+  RejectKind reject_kind = kRejectNone;
   bool saw_detection = false;
   BBox reject_person_box;
 };
@@ -80,6 +84,14 @@ class PostureAnalyzer {
   PostureAnalyzer(const Config& cfg, const Baseline& baseline);
 
   void SetBaseline(const Baseline& baseline);
+
+  // ---- 逐姿势校准画像（per-posture profile）----
+  // 启用后，姿态状态由「最近原型分类 + 标签保持 N 秒」决定，
+  // 不再使用手调阈值。规则仍会继续计算，仅用于诊断对照。
+  void SetProfile(const PostureProfile* profile, double hold_s, double accept_radius);
+  void ClearProfile();
+  bool profile_active() const { return profile_ != nullptr && !profile_->empty(); }
+  const std::vector<std::string>& profile_labels() const { return profile_label_names_; }
   // 当前生效的低头阈值（随校准基准自动缩放，供自检/日志展示）
   float HeadDownThreshold() const;
   bool HasBaseline() const { return baseline_.valid; }
@@ -142,6 +154,16 @@ class PostureAnalyzer {
   HoldRule hand_face_rule_;
 
   std::optional<SteadyTime> last_valid_at_;
+
+  // ---- 画像分类状态 ----
+  const PostureProfile* profile_ = nullptr;
+  double profile_hold_s_ = 2.0;
+  double profile_accept_radius_ = 3.0;
+  std::string pending_label_;
+  SteadyTime pending_since_{};
+  std::string active_label_;              // 已采纳的标签（空 = normal/未定）
+  std::vector<std::string> profile_label_names_;
+  bool ProfileUpdate(const PostureMetrics& m, SteadyTime now, PostureObservation* obs);
 
   // width_ratio 的滑动中值窗口。
   // 为什么要平滑：肩宽是「左肩-右肩」两点之差，w8a8 量化下任一肩点抖动

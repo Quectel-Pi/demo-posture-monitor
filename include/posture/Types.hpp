@@ -162,6 +162,12 @@ struct PostureObservation {
   std::vector<RuleTrigger> triggers;   // 本帧新「激活」的规则（已去重，不会每帧重复）
   std::vector<std::string> active_keys;  // 当前仍处于激活态的规则
   std::vector<RuleDiag> rule_diags;      // 每条规则的「当前值 / 阈值 / 已持续」
+  // 逐姿势画像分类结果（profile 模式启用时有效）
+  bool profile_used = false;
+  std::string profile_label;             // 命中标签；空 = 不在已采集样本范围内
+  double profile_distance = 0.0;         // 兼容：= 1/(strength+1)
+  double profile_strength = 0.0;         // 命中规则越阈值的倍数，越大越确定
+  std::string profile_rule;              // 命中的规则描述
 };
 
 // 个人校准基准（§4.6）

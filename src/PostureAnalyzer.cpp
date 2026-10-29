@@ -208,6 +208,126 @@ void PostureAnalyzer::SetBaseline(const Baseline& baseline) {
 
 float PostureAnalyzer::HeadDownThreshold() const { return head_down_rule_.trigger(); }
 
+void PostureAnalyzer::SetProfile(const PostureProfile* profile, double hold_s,
+                                 double accept_radius) {
+  profile_ = profile;
+  profile_hold_s_ = hold_s > 0 ? hold_s : 2.0;
+  profile_accept_radius_ = accept_radius > 0 ? accept_radius : 3.0;
+  pending_label_.clear();
+  active_label_.clear();
+  pending_since_ = SteadyTime{};
+  profile_label_names_ = profile ? profile->labels() : std::vector<std::string>{};
+  if (profile_ && !profile_->empty()) {
+    std::string names;
+    for (const auto& l : profile_label_names_) {
+      names += PostureLabelZh(l);
+      names += " ";
+    }
+    LOG_INFO("逐姿势画像已启用：", profile_label_names_.size(), " 个姿势 [", names,
+             "]  总样本 ", profile_->total_samples(),
+             "  保持门限 ", profile_hold_s_, "s  接受半径 ", profile_accept_radius_);
+  }
+}
+
+void PostureAnalyzer::ClearProfile() {
+  profile_ = nullptr;
+  pending_label_.clear();
+  active_label_.clear();
+  profile_label_names_.clear();
+}
+
+// 返回 true 表示本帧已由画像给出结论（obs.state/explanation 已填好）
+bool PostureAnalyzer::ProfileUpdate(const PostureMetrics& m, SteadyTime now,
+                                    PostureObservation* obs) {
+  if (!profile_active()) return false;
+  // 画像特征全部是「相对校准基准」的量，没有基准就一定算不出来。
+  // 这里必须让位给传统规则路径，否则会把 state 永久钉在 UNKNOWN，
+  // 而 main.cpp 的自动校准条件是 state != UNKNOWN —— 两边互相堵死，
+  // 结果就是「删了基准反而永远校准不了」（实测踩过）。
+  if (!baseline_.valid) return false;
+  PostureProfile::FeatureVec f{};
+  std::string why;
+  if (!BuildFeatureVector(m, baseline_, &f, &why)) {
+    obs->profile_used = true;
+    obs->profile_label.clear();
+    obs->explanation = "画像分类缺关键量：" + why;
+    // 关键量缺失：维持上一状态一小会儿，超时就报 UNKNOWN
+    if (!active_label_.empty()) {
+      obs->state = PostureState::kUnknown;
+      return true;
+    }
+    obs->state = PostureState::kUnknown;
+    return true;
+  }
+
+  const auto v = profile_->Classify(f, profile_accept_radius_);
+  obs->profile_used = true;
+  obs->profile_label = v.label;
+  obs->profile_distance = v.distance;
+  obs->profile_strength = v.strength;
+  obs->profile_rule = v.matched_rule;
+
+  // 标签保持：同一个标签连续 hold_s 秒才采纳，避免抖动
+  if (v.label == pending_label_ && !v.label.empty()) {
+    const double held = std::chrono::duration<double>(now - pending_since_).count();
+    if (held >= profile_hold_s_ && v.label != active_label_) {
+      const std::string prev = active_label_;
+      active_label_ = v.label;
+      LOG_INFO("画像判定切换：", prev.empty() ? "（无）" : PostureLabelZh(prev), " -> ",
+               PostureLabelZh(active_label_), "  命中 ", v.matched_rule, "  强度 ",
+               v.strength, "  特征 head_drop=", f[0], " ear_tilt=", f[1],
+               " size=", f[3], " wrist_rise=", f[4], " wrist_near=", f[5]);
+      // 切换到异常姿势时产生一次提醒触发器
+      if (active_label_ != "normal" && active_label_ != "away") {
+        RuleTrigger t;
+        t.key = active_label_;
+        t.label_zh = PostureLabelZh(active_label_);
+        t.active_s = held;
+        t.priority = 60;
+        obs->triggers.push_back(t);
+      }
+    }
+  } else {
+    pending_label_ = v.label;
+    pending_since_ = now;
+  }
+
+  // 长时间判不出来（距离一直超半径）→ 明确报 UNKNOWN
+  if (pending_label_.empty()) {
+    const double stuck =
+        std::chrono::duration<double>(now - pending_since_).count();
+    if (stuck >= profile_hold_s_ * 2.0) {
+      active_label_.clear();
+      obs->state = PostureState::kUnknown;
+      obs->explanation = "姿势不在已校准的样本范围内（没命中任何已采集姿势）";
+      return true;
+    }
+  }
+
+  if (active_label_.empty()) {
+    obs->state = PostureState::kUnknown;
+    obs->explanation = "画像判定中…";
+    return true;
+  }
+  if (active_label_ == "normal") {
+    obs->state = PostureState::kNormal;
+  } else if (active_label_ == "head_down") {
+    obs->state = PostureState::kHeadDown;
+  } else if (active_label_ == "head_tilt") {
+    obs->state = PostureState::kHeadTilt;
+  } else if (active_label_ == "too_close") {
+    obs->state = PostureState::kTooClose;
+  } else if (active_label_ == "hand_face") {
+    obs->state = PostureState::kHandOnFace;
+  } else {
+    obs->state = PostureState::kNormal;
+  }
+  obs->active_keys.clear();
+  if (active_label_ != "normal") obs->active_keys.push_back(active_label_);
+  obs->explanation = std::string("（") + v.matched_rule + "）";
+  return true;
+}
+
 float PostureAnalyzer::SmoothWidthRatio(float raw) {
   if (raw <= 0.f) return wr_count_ > 0 ? wr_window_[(wr_next_ + 7 - 1) % 7] : 0.f;
   wr_window_[wr_next_] = raw;
@@ -272,9 +392,21 @@ std::string PostureAnalyzer::CheckBaselineDrift(const PostureMetrics& m) const {
   if (!baseline_.valid || !m.valid) return {};
   if (baseline_.width_ratio <= 0.001) return {};   // 老基准没记这个字段，跳过检查
 
+  // 基准本身的宽占比就不合理（历史坏基准，如 0.07）→ 直接判失效。
+  // 只看「当前 vs 基准」的倍数会漏掉这种情况：坏基准会让倍数看起来正常。
+  if (baseline_.width_ratio < 0.15 || baseline_.width_ratio > 0.80) {
+    char buf[200];
+    std::snprintf(buf, sizeof(buf),
+                  "基准记录的肩宽占比 %.2f 不合理（正常 0.15~0.80），基准需重建",
+                  baseline_.width_ratio);
+    return buf;
+  }
+
   // 距离：肩宽占画面宽的比例。挪动摄像头（远近变化）会让它成倍变化。
   const double ratio = m.width_ratio / baseline_.width_ratio;
-  if (ratio > 1.8 || ratio < 0.55) {
+  const double drift_hi = cfg_.baseline_drift_ratio;
+  const double drift_lo = 1.0 / cfg_.baseline_drift_ratio;
+  if (ratio > drift_hi || ratio < drift_lo) {
     char buf[160];
     std::snprintf(buf, sizeof(buf),
                   "画面里肩宽占比 %.2f，校准基准是 %.2f（差 %.1f 倍）——"
@@ -285,7 +417,7 @@ std::string PostureAnalyzer::CheckBaselineDrift(const PostureMetrics& m) const {
   }
   // 头肩纵向偏移：机位高度/俯仰变了会明显偏移
   const double dy = m.head_offset_y - baseline_.head_offset_y;
-  if (std::fabs(dy) > 0.45) {
+  if (std::fabs(dy) > cfg_.baseline_drift_head_dy) {
     char buf[160];
     std::snprintf(buf, sizeof(buf),
                   "头肩纵向偏移 %.2f，校准基准是 %.2f（差 %.2f 个肩宽）",
@@ -360,7 +492,12 @@ PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int fra
   {
     const Keypoint& ear_l = person.joints[kEarL];
     const Keypoint& ear_r = person.joints[kEarR];
-    if (ear_l.confidence >= min_conf && ear_r.confidence >= min_conf) {
+    auto in_frame = [&](const Keypoint& k) {
+      return k.x >= 0.f && k.x <= static_cast<float>(frame_width) && k.y >= 0.f &&
+             k.y <= static_cast<float>(frame_height);
+    };
+    if (ear_l.confidence >= min_conf && ear_r.confidence >= min_conf &&
+        in_frame(ear_l) && in_frame(ear_r)) {
       const float ear_d = Dist(ear_l.x, ear_l.y, ear_r.x, ear_r.y);
       if (ear_d > sw * 0.35f) {
         m.ear_mid_offset_y = ((ear_l.y + ear_r.y) * 0.5f - sy) / sw;
@@ -381,7 +518,14 @@ PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int fra
   // 耳线角（歪头的可靠判据）。两只耳朵都可信时才算。
   const Keypoint& ear_l = person.joints[kEarL];
   const Keypoint& ear_r = person.joints[kEarR];
-  if (ear_l.confidence >= min_conf && ear_r.confidence >= min_conf) {
+  // 耳朵出框时不认这一帧的耳线角：模型对画面外的关键点是「外推」出来的，
+  // 角度会乱跳，会直接把歪头规则打成常亮。
+  auto inside = [&](const Keypoint& k) {
+    return k.x >= 0.f && k.x <= static_cast<float>(frame_width) && k.y >= 0.f &&
+           k.y <= static_cast<float>(frame_height);
+  };
+  if (ear_l.confidence >= min_conf && ear_r.confidence >= min_conf &&
+      inside(ear_l) && inside(ear_r)) {
     const float ear_dist = Dist(ear_l.x, ear_l.y, ear_r.x, ear_r.y);
     if (ear_dist > sw * 0.35f) {   // 两耳距离太小说明错了
       m.ear_angle_deg = NormalizeLineAngle(
@@ -474,6 +618,36 @@ bool PostureAnalyzer::Plausible(const PostureMetrics& m, const PersonPose& p,
   if (p.box.w < 32.f || p.box.h < 48.f) return false;
   if (p.box.Area() < frame_area * 0.01f) return false;
 
+  // ★ 取景门：直接检查「本系统真正用到的关键点」是否都在画面内。
+  //
+  // 为什么不用人体框判断：实测 box_y 可以稳定给出 -142px（顶边在画面外 30%），
+  // 但同一时刻耳朵的关键点在 y=147~159，离上沿还有 147 像素 —— 完全可用。
+  // 框是模型「外推」的，它默认人体应该延伸到画面外，拿它推断"头被裁"会误杀。
+  //
+  // 真正决定可判性的是：鼻子 / 双耳 / 双肩 是否落在画面内（留一点边距）。
+  // 缺哪个就明确说缺哪个，比笼统报"机位不对"有用得多。
+  {
+    const float mx = frame_width * 0.015f;
+    const float my = frame_height * 0.015f;
+    auto inside = [&](const Keypoint& k) {
+      return k.x >= mx && k.x <= frame_width - mx && k.y >= my &&
+             k.y <= frame_height - my;
+    };
+    const Keypoint& nose = p.joints[kNose];
+    const Keypoint& e_l = p.joints[kEarL];
+    const Keypoint& e_r = p.joints[kEarR];
+    const Keypoint& s_l = p.joints[kShoulderL];
+    const Keypoint& s_r = p.joints[kShoulderR];
+    if (!inside(nose)) return false;            // 原因由 SelectPrimary 细化
+    if (!inside(s_l) || !inside(s_r)) return false;
+    // 耳朵只有在本帧被判定可信时才要求它入画（不可信会自动退回别的判据）
+    if (m.ear_angle_valid && (!inside(e_l) || !inside(e_r))) return false;
+  }
+  // ★ 不再用「人体框宽」判断双肩是否出框。
+  // 框把张开的胳膊也包进去，桌面机位下框宽能到画面宽的 100%，
+  // 但双肩关键点其实好端端在画面里 —— 已经用关键点判断了，这里再来一次
+  // 就是误杀（实测：正常坐姿被判「双肩被裁（占宽 100%）」，一帧都采不到）。
+
   const float sx = (p.joints[kShoulderL].x + p.joints[kShoulderR].x) * 0.5f;
   const float sy = (p.joints[kShoulderL].y + p.joints[kShoulderR].y) * 0.5f;
   const Keypoint& nose = p.joints[kNose];
@@ -520,18 +694,31 @@ PrimarySelection PostureAnalyzer::SelectPrimary(const std::vector<PersonPose>& p
       continue;
     }
     // 记下最像人的那个被拒原因，供上层区分"无人"与"机位不对"
-    if (!m.valid) {
-      if (p.box.Area() > biggest_area) {
-        biggest_area = p.box.Area();
-        biggest = &p;
-        sel.reject_reason = m.invalid_reason;
-        sel.reject_person_box = p.box;
-      }
-    } else if (p.box.Area() > biggest_area) {
+    if (p.box.Area() > biggest_area) {
       biggest_area = p.box.Area();
       biggest = &p;
-      sel.reject_reason = "人体相对画面的位置/比例不合理（可能有半个身子在画面外）";
       sel.reject_person_box = p.box;
+    }
+    if (!m.valid) {
+      if (sel.reject_reason.empty()) sel.reject_reason = m.invalid_reason;
+      continue;
+    }
+    // 拒因要具体到「缺哪个关键点」——现场调机位才有方向
+    if (sel.reject_reason.empty()) {
+      // Plausible 里因为关键点出框被拒（取景门），细化原因
+      const float mx = frame_width * 0.015f;
+      const float my = frame_height * 0.015f;
+      auto out_of = [&](const Keypoint& k) {
+        return k.x < mx || k.x > frame_width - mx || k.y < my ||
+               k.y > frame_height - my;
+      };
+      if (out_of(p.joints[kNose])) {
+        sel.reject_reason = "鼻子关键点跑到画面外了，请调整摄像头角度让正脸入画";
+      } else if (out_of(p.joints[kShoulderL]) || out_of(p.joints[kShoulderR])) {
+        sel.reject_reason = "双肩有被裁掉的，请坐远一点或把摄像头后退";
+      } else {
+        sel.reject_reason = "几何特征不可用（可能有半个身子在画面外）";
+      }
     }
   }
   if (scored.empty()) {
@@ -627,7 +814,7 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
     return obs;
   }
 
-  // too_close 用平滑后的 width_ratio；头肩纵向/肩线角保持原始（姿态变化要即时响���）
+  // too_close 用平滑后的 width_ratio；头肩纵向/肩线角保持原始（姿态变化要即时响应）
   m.width_ratio_raw = m.width_ratio;
   m.width_ratio = SmoothWidthRatio(m.width_ratio_raw);
   // 耳线角也平滑（单帧跳变 25° 会把歪头判据打断）
@@ -636,6 +823,13 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
   last_metrics_ = m;
   last_valid_at_ = now;
   obs.metrics = m;
+
+  // ---- 画像模式：用「最近原型 + 标签保持」判定，不再依赖手调阈值 ----
+  if (profile_active()) {
+    if (ProfileUpdate(m, now, &obs)) {
+      return obs;
+    }
+  }
 
   if (sel.ambiguous) {
     // 多人：不做个体判定，但规则计时也被挂起（不给 optional -> 不新增异常）

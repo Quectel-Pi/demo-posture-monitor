@@ -33,6 +33,7 @@
 #include "posture/Notifier.hpp"
 #include "posture/PoseEngine.hpp"
 #include "posture/PostureAnalyzer.hpp"
+#include "posture/PostureProfile.hpp"
 #include "posture/ReminderManager.hpp"
 #include "posture/UserCalibration.hpp"
 
@@ -366,6 +367,25 @@ int main(int argc, char** argv) {
 
   // ---- 子系统 ----
   PostureAnalyzer analyzer(cfg, baseline);
+
+  // ---- 逐姿势校准画像（存在则用画像分类，替代手调阈值）----
+  PostureProfile profile;
+  bool profile_loaded = false;
+  {
+    std::string perr;
+    if (profile.Load(cfg.profile_file, &perr)) {
+      profile_loaded = true;
+      profile_loaded = !profile.empty();
+    }
+    if (profile_loaded) {
+      analyzer.SetProfile(&profile, cfg.profile_hold_s, cfg.profile_accept_radius);
+      LOG_INFO("已加载逐姿势画像 ", cfg.profile_file, "（", profile.total_samples(),
+               " 个样本）");
+    } else {
+      LOG_WARN("没有逐姿势画像（", cfg.profile_file,
+               "），使用阈值规则判定。想提高精度就跑 scripts/teach_posture.py 逐姿势采集");
+    }
+  }
   UserCalibration calibration(cfg);
   EyeCareMonitor eye_care(cfg, args.eye_seconds);
   ReminderManager reminders(cfg);
@@ -623,8 +643,11 @@ int main(int argc, char** argv) {
       }
 
       // ---- 自动校准：有基准就不做；没基准且确认在座则自动开始 ----
+      // 只排除「确认无人」——不能排除 kUnknown：没有基准时规则路径本来就会报
+      // UNKNOWN（"未校准"），把它排除掉就永远进不了校准（实测死锁）。
+      // 人的几何是否可用由 CalibrateFeed 自己把关。
       if (!analyzer.HasBaseline() && !calibration.active() && auto_calibrate_armed &&
-          obs.state != PostureState::kUserAway && obs.state != PostureState::kUnknown) {
+          obs.state != PostureState::kUserAway) {
         PostureMetrics probe;
         if (analyzer.CalibrateFeed(persons, frame.width, frame.height, &probe)) {
           calibration.Start(now, camera.DeviceId(), frame.width, frame.height,
@@ -647,6 +670,10 @@ int main(int argc, char** argv) {
               LOG_ERROR("校准结果保存失败: ", err);
             }
             analyzer.SetBaseline(fresh);
+            if (analyzer.profile_active()) {
+              LOG_WARN("校准基准刚被更新，但逐姿势画像的特征是相对旧基准算的 —— "
+                       "请重新跑 scripts/teach_posture.py 采集，否则分类会偏");
+            }
             if (args.calibrate_only) {
               g_running = false;
             }
@@ -705,6 +732,12 @@ int main(int argc, char** argv) {
       snapshot.session_state = ToString(eye.state);
       snapshot.use_s = eye.active_s;
       snapshot.remaining_s = eye.remaining_s;
+      snapshot.profile_active = analyzer.profile_active();
+      snapshot.profile_label = obs.profile_label;
+      snapshot.profile_distance = obs.profile_distance;
+      snapshot.profile_strength = obs.profile_strength;
+      snapshot.profile_rule = obs.profile_rule;
+      snapshot.profile_classes = analyzer.profile_labels();
       snapshot.active_rules = obs.active_keys;
       snapshot.rules.clear();
       for (const auto& dg : obs.rule_diags) {
@@ -727,7 +760,25 @@ int main(int argc, char** argv) {
           snapshot.box_w = ps.person->box.w;
           snapshot.box_h = ps.person->box.h;
         } else {
+          // ★ 必须清空：否则 status 里会一直报「上一次有效」的框，
+          //   现场看到的就是一个恒定不变、与实际不符的取景框（踩过）
           snapshot.box_valid = false;
+          snapshot.box_x = 0.0;
+          snapshot.box_y = 0.0;
+          snapshot.box_w = 0.0;
+          snapshot.box_h = 0.0;
+        }
+        // 被拒时也报出「最大的检出框」，现场调机位时才有数看
+        if (ps.reject_person_box.w > 0.f) {
+          snapshot.raw_box_valid = true;
+          snapshot.raw_box_x = ps.reject_person_box.x;
+          snapshot.raw_box_y = ps.reject_person_box.y;
+          snapshot.raw_box_w = ps.reject_person_box.w;
+          snapshot.raw_box_h = ps.reject_person_box.h;
+          snapshot.reject_reason = ps.reject_reason;
+        } else {
+          snapshot.raw_box_valid = false;
+          snapshot.reject_reason = ps.reason;
         }
       }
       snapshot.frame_width = frame.width;
@@ -736,9 +787,13 @@ int main(int argc, char** argv) {
       snapshot.today_use_s = stats.today().use_s + use_accum;
       snapshot.today_alerts = stats.today().alerts;
       // 归一化骨架点发给 UI（本地 socket，不落盘、不出网）
+      //
+      // ★ 不再要求 metrics.valid：调机位时正是「几何被拒」的时候最需要看
+      //   关键点在哪。之前卡了这个条件，导致取景不合格时 socket 里没有骨架，
+      //   现场只能看到「无人/几何不可用」，完全不知道差在哪（实测踩过）。
       snapshot.keypoints_valid = false;
       snapshot.keypoints_norm.clear();
-      if (obs.metrics.valid && frame.width > 0 && frame.height > 0) {
+      if (frame.width > 0 && frame.height > 0) {
         const PrimarySelection primary =
             analyzer.SelectPrimary(persons, frame.width, frame.height);
         if (primary.person && !primary.ambiguous) {

@@ -63,6 +63,20 @@ struct Config {
   // 用来挡"模型把鼻子检到肩膀上"这种明显错误，而不是挡正常低头。
   float min_head_gap = 0.08f;
 
+  // ---- 取景硬门（超出就拒绝判定，明确告诉用户「机位不对」）----
+  //
+  // 只保留两条真正的硬约束，都来自「哪些关键点必须可见」：
+  //   frame_max_top_over：头顶被裁 = 耳朵/眼睛出画面 → 歪头永远测不到。
+  //     这是必须拦的（实测人太近时超出 30%）。
+  //   frame_max_person_w：人太宽 = 双肩被裁 → 肩宽/肩线全失真。
+  //
+  // 故意**不设**「占画面高上限」：桌面机位常常只拍到头和肩，躯干在画面外，
+  // 人体框自然撑满 100% 高度 —— 这对本系统完全没问题（只需要头+肩）。
+  // 早期版本设了 0.90，结果把所有正常帧都拦住了。
+  float frame_max_top_over = 0.03f;
+  float frame_max_person_h = 1.50f;   // 实际不生效，留字段兼容
+  float frame_max_person_w = 0.90f;
+
   // 低头阈值：相对「基准头肩距离」的比例。
   //
   // 为什么不能用固定绝对值：头肩纵向距离本身随摄像头俯仰角变化很大
@@ -125,6 +139,18 @@ struct Config {
   int ui_jpeg_quality = 70;      // 1-100
 
   // ---- runtime（本版新增，部署路径）----
+  // ---- 逐姿势校准画像 ----
+  // 存在就用画像分类（最近原型），不存在就退回阈值规则。
+  std::string profile_file = "/var/lib/posture-guard/postures.txt";
+  double profile_hold_s = 2.0;         // 同一标签连续多久才采纳
+  double profile_accept_radius = 3.0;  // 距离超过它判 UNKNOWN（不在已校准范围内）
+  // 基准漂移阈值：宽占比差这么多倍就判基准失效、自动重校准。
+  // 之所以要收紧到 1.45：全部姿势特征都是「相对基准」的量，人一退椅子
+  // 就整体失配（实测校准 0.459、后来 0.305，差 1.5 倍，size 变成 0.66，
+  // 所有姿势都判不出来）。1.8 拦不住这种。
+  double baseline_drift_ratio = 1.45;
+  double baseline_drift_head_dy = 0.38;
+
   std::string status_socket = "/run/posture-guard/status.sock";
   std::string state_dir = "/var/lib/posture-guard";
   std::string stats_dir = "/var/lib/posture-guard/stats";

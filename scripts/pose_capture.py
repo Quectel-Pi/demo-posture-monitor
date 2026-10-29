@@ -42,11 +42,19 @@ KEYPOINT_NAMES = [
 ]
 
 
-def read_frames(socket_path: str, seconds: float, timeout: float = 8.0) -> list[dict]:
-    """连续采集 seconds 秒内的所有 status 消息。"""
+def read_frames(socket_path: str, seconds: float, timeout: float = 8.0,
+                save_video_to: str | None = None) -> list[dict]:
+    """连续采集 seconds 秒内的所有 status 消息。
+
+    save_video_to 非空时，同时把视频流里的摄像头原始帧存成 JPEG
+    （每 3 帧存一张，够做数值分析又不占空间）。
+    """
+    import base64
     import socket as sock_mod
 
     frames: list[dict] = []
+    v_saved = 0
+    v_seen = 0
     s = sock_mod.socket(sock_mod.AF_UNIX, sock_mod.SOCK_STREAM)
     s.settimeout(timeout)
     try:
@@ -72,6 +80,17 @@ def read_frames(socket_path: str, seconds: float, timeout: float = 8.0) -> list[
                     continue
                 if msg.get("type") == "status":
                     frames.append(msg)
+                elif msg.get("type") == "video" and save_video_to:
+                    v_seen += 1
+                    if v_seen % 3 == 1:      # 抽帧，避免写太多
+                        try:
+                            raw = base64.b64decode(msg["jpeg"])
+                            path = f"{save_video_to}/frame_{v_saved:02d}.jpg"
+                            with open(path, "wb") as vf:
+                                vf.write(raw)
+                            v_saved += 1
+                        except (KeyError, ValueError, OSError):
+                            pass
     finally:
         s.close()
     return frames
@@ -212,13 +231,14 @@ def guided(args) -> int:
             print(f"   请摆好姿势… {i}    ", end="\r", flush=True)
             time.sleep(1)
         print(f"   开始采集（保持 {dur:.0f} 秒）        ")
-        frames = read_frames(args.socket, dur)
+        d = os.path.join(args.out, label)
+        os.makedirs(d, exist_ok=True)
+        frames = read_frames(args.socket, dur,
+                             save_video_to=None if args.no_shot else d)
         if not frames:
             print("   !! 没收到数据，跳过")
             rc = 1
             continue
-        d = os.path.join(args.out, label)
-        os.makedirs(d, exist_ok=True)
         if not args.no_shot:
             take_screenshot(os.path.join(d, "screen.png"))
         summary = summarize(label, frames)

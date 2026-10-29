@@ -60,6 +60,18 @@ struct StatusSnapshot {
   // 主用户人体框（像素），用于判断"人是不是太大/太小/出框"
   double box_x = 0.0, box_y = 0.0, box_w = 0.0, box_h = 0.0;
   bool box_valid = false;
+  // 被取景门/几何门拒掉时，也把「最大的那个检出框」报出来，
+  // 否则现场调机位时只能看到「无人」，完全不知道人到底多大、在哪。
+  bool raw_box_valid = false;
+  double raw_box_x = 0.0, raw_box_y = 0.0, raw_box_w = 0.0, raw_box_h = 0.0;
+  std::string reject_reason;
+  // 逐姿势画像分类结果
+  bool profile_active = false;
+  std::string profile_label;
+  double profile_distance = 0.0;   // 兼容：= 1/(strength+1)
+  double profile_strength = 0.0;   // 命中规则越阈值的倍数，越大越确定
+  std::string profile_rule;        // 例 "ear_tilt >= 16.45（阈值…实测…）"
+  std::vector<std::string> profile_classes;
   std::string last_notification_title;
   double last_notification_ago_s = -1.0;
 

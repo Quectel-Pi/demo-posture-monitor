@@ -52,6 +52,7 @@ add_library(posture_core STATIC
   src/V4l2Probe.cpp
   src/CameraCapture.cpp
   src/RknnPoseEngine.cpp
+  src/PostureProfile.cpp
   src/PostureAnalyzer.cpp
   src/UserCalibration.cpp
   src/EyeCareMonitor.cpp

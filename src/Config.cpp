@@ -61,6 +61,12 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
       yaml.Num("posture.missing_data_timeout_s", c.missing_data_timeout_s));
 
   c.min_head_gap = static_cast<float>(yaml.Num("posture.min_head_gap", c.min_head_gap));
+  c.frame_max_top_over = static_cast<float>(
+      yaml.Num("posture.frame_max_top_over", c.frame_max_top_over));
+  c.frame_max_person_h = static_cast<float>(
+      yaml.Num("posture.frame_max_person_h", c.frame_max_person_h));
+  c.frame_max_person_w = static_cast<float>(
+      yaml.Num("posture.frame_max_person_w", c.frame_max_person_w));
   c.head_down_drop_ratio = static_cast<float>(
       yaml.Num("posture.head_down_drop_ratio", c.head_down_drop_ratio));
   c.head_down_drop_min = static_cast<float>(
@@ -116,6 +122,15 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
   if (c.ui_jpeg_quality > 95) c.ui_jpeg_quality = 95;
   if (c.ui_video_fps < 1) c.ui_video_fps = 1;
   if (c.ui_video_fps > 30) c.ui_video_fps = 30;
+
+  c.profile_file = yaml.Str("posture.profile_file", c.profile_file);
+  c.profile_hold_s = yaml.Num("posture.profile_hold_s", c.profile_hold_s);
+  c.profile_accept_radius =
+      yaml.Num("posture.profile_accept_radius", c.profile_accept_radius);
+  c.baseline_drift_ratio =
+      yaml.Num("posture.baseline_drift_ratio", c.baseline_drift_ratio);
+  c.baseline_drift_head_dy =
+      yaml.Num("posture.baseline_drift_head_dy", c.baseline_drift_head_dy);
 
   c.status_socket = yaml.Str("runtime.status_socket", c.status_socket);
   c.state_dir = yaml.Str("runtime.state_dir", c.state_dir);

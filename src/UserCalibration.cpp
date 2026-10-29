@@ -340,6 +340,27 @@ UserCalibration::FeedResult UserCalibration::Feed(const PostureMetrics& metrics,
   // 实测遇到过一次校准出 -0.086（鼻子几乎贴在肩线上），导致低头阈值退化到
   // 下限 0.10 而鼻子最大只能再降 0.086 —— 低头永远触发不了。
   // 优先用耳中点；两者都不合理就拒绝这次校准，让用户重来。
+  // ★ 肩宽占比也要检查：曾出现宽度占比 0.07 的基准（人只露出一小块就被当成人），
+  //   之后所有相对阈值全部错 5 倍。正常坐在 640 宽画面里是 0.20~0.70。
+  const double wr_ref = Median([&] {
+    std::vector<double> v;
+    for (const auto& s : kept) v.push_back(s.width_ratio);
+    return v;
+  }());
+  if (wr_ref < 0.15 || wr_ref > 0.80) {
+    if (message) {
+      char buf[240];
+      std::snprintf(buf, sizeof(buf),
+                    "人体在画面里的比例异常（肩宽占画面宽 %.0f%%，正常 20%%~70%%）。"
+                    "请坐正、让头和双肩完整入画，并确认镜头没有对着别的东西",
+                    wr_ref * 100.0);
+      *message = buf;
+    }
+    active_ = false;
+    samples_.clear();
+    return FeedResult::kFailed;
+  }
+
   const double head_ref = b.ear_mid_valid ? b.ear_mid_offset_y : b.head_offset_y;
   if (std::fabs(head_ref) < 0.15 || std::fabs(head_ref) > 1.6) {
     if (message) {
