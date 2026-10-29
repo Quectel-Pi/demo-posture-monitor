@@ -74,12 +74,13 @@ usermod -aG video "$SERVICE_USER"
 echo "   已加入 video 组（摄像头节点是 root:video 0660）"
 
 echo "== 3/7 安装程序与模型 =="
-install -d -m 755 "$PREFIX" "$PREFIX/bin" "$PREFIX/models" "$PREFIX/ui" "$PREFIX/docs" "$PREFIX/scripts"
+install -d -m 755 "$PREFIX" "$PREFIX/bin" "$PREFIX/models" "$PREFIX/ui" "$PREFIX/assets/voice" "$PREFIX/docs" "$PREFIX/scripts"
 install -m 755 "$BIN" "$PREFIX/bin/posture_guard"
 install -m 644 "$MODEL_SRC" "$PREFIX/models/yolov8n-pose.rknn"
 [[ -f "$PROJ/ui/posture_guard_ui.py" ]] && install -m 755 "$PROJ/ui/posture_guard_ui.py" "$PREFIX/ui/"
 for f in "$PROJ"/docs/*.md; do [[ -f "$f" ]] && install -m 644 "$f" "$PREFIX/docs/"; done
 for f in "$PROJ"/scripts/*.sh; do [[ -f "$f" ]] && install -m 755 "$f" "$PREFIX/scripts/"; done
+install -m 644 "$PROJ"/assets/voice/*.wav "$PREFIX/assets/voice/"
 echo "   $PREFIX/bin/posture_guard"
 echo "   $PREFIX/models/yolov8n-pose.rknn (sha256 $(sha256sum "$MODEL_SRC" | cut -c1-16))"
 
@@ -103,6 +104,15 @@ d /var/lib/posture-guard/stats 0755 posture posture -
 EOF
 systemd-tmpfiles --create /etc/tmpfiles.d/posture-guard.conf 2>/dev/null || true
 echo "   $STATE_DIR + /etc/tmpfiles.d/posture-guard.conf"
+
+echo "== 5.5/7 喇叭音量（M2 专用，非致命）=="
+# WirePlumber 按 ALSA path 配置把 DAC 钉死，出厂 179(-6dB) 配小喇叭听不清；
+# 这里调到 205 并试听。失败不影响部署（例如非 M2 板没有这个 path 文件）。
+if [[ -f scripts/tune_speaker.sh ]]; then
+  sh scripts/tune_speaker.sh "${SPEAKER_DAC:-205}" >/dev/null 2>&1 \
+    && echo "   已设置 DAC=${SPEAKER_DAC:-205} 并试听" \
+    || echo "   跳过（该板没有 es8389-m2 path 配置）"
+fi
 
 echo "== 6/7 systemd 单元 =="
 install -m 644 "$PROJ/systemd/$SERVICE.service" "/etc/systemd/system/$SERVICE.service"

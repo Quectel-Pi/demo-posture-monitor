@@ -453,7 +453,108 @@ journalctl -u posture-guard | grep 对焦
 ⚠️ 即使加了 ToF，也要注意量的是**到传感器**的距离，不是「眼睛到屏幕」——
 摄像头在显示器上方俯拍时两者差一截。
 
-## 17. 排障常用命令
+## 17. 喇叭不出声 / 声音很小 / 只有杂音
+
+本机外接喇叭排查完整走过一遍，**四个独立问题叠在一起**，逐个说清。
+
+### 17.1 先确认不是软件把人绕晕了
+
+```bash
+# ① adb 进去默认是 root，pactl/paplay 会报
+#    "Connection refused" 或 "Host is down"
+#    —— PipeWire 是桌面用户 quectel 的会话服务，root 连不上
+su quectel -s /bin/sh -c "XDG_RUNTIME_DIR=/run/user/1000 pactl list short sinks"
+
+# ② 别把 pkill 写进同一条 shell 命令
+#    pkill -f aplay  会把包含 "aplay" 字样的这条 sh 也杀掉（exit 137）
+```
+
+### 17.2 `amixer` 改 DAC 音量无效 —— WirePlumber 每次播放会覆盖回去
+
+实测：`amixer -c 0 sset DACL 255` 之后读寄存器是 `0xff`，
+但一开始播放就变回 `0xb3`（=179=-6dB）。
+
+```bash
+R=/sys/kernel/debug/regmap/2-0010/registers
+sed -n '71,72p' $R          # 0x46/0x47 = DACL/DACR
+
+amixer -c 0 sset DACL 255
+sed -n '71p' $R             # 0xff  ← 改成功了
+aplay -D hw:0,0 /tmp/x.wav &
+sleep 1; sed -n '71p' $R    # 0xb3  ← 被写回去了
+```
+
+原因：`/usr/share/alsa-card-profile/mixer/paths/analog-output-es8389-m2.conf`
+里写死了 `[Element DACL] volume = 179`，WirePlumber 按它工作。
+
+**正确做法是改这个配置文件**（`scripts/tune_speaker.sh` 做的就是这件事）：
+
+```bash
+sh /opt/posture-guard/scripts/tune_speaker.sh 205   # 179=-6dB → 205≈+1dB
+```
+
+改完必须重启 wireplumber 才生效（脚本会自动做）。
+`179 → 205` 实测从「听不清」变成「够大听得清」。
+
+### 17.3 语音素材 RMS 只有 11%，峰值再高也没用
+
+六个提示语音峰值 73~99%，但 **RMS 只有 10~11%**。
+响度看的是 RMS 不是峰值，所以听感比满刻度正弦低约 9dB。
+
+`assets/voice/*.wav` 已经用 ffmpeg 做过响度归一化：
+
+```bash
+ffmpeg -i in.wav -af "acompressor=threshold=0.125:ratio=1.6:attack=8:release=120,\
+loudnorm=I=-14:TP=-1.0:LRA=11,alimiter=limit=0.89" -ar 22050 -ac 1 out.wav
+```
+
+RMS 从 11% 提到 19~20%（+5dB）。自己换素材也要做这一步，否则「换了句更清楚的录音反而更轻」。
+
+### 17.4 功放是 BTL 差分，喇叭必须接 VOP/VON 两端
+
+网表核对结果（`docs/sch/M2` 的 allegro 网表）：
+
+```
+U0903 = AW8010BFCR   单声道 Class-D 功放
+  C3 → R0934 → VOP_1 → J0901 pin1     ← 喇叭 +
+  A3 → R0915 → VON_1 → J0901 pin2     ← 喇叭 -
+  B1/B2 → PA_VDD_5V                    （常供 5V）
+  C2    → SPK_SD_3V3 = DTS 的 spk-con-gpio（播放时 DAPM 拉高）
+  A1/C1 → 经 150K + 33nF 接 ES8389 的 LINEOUT_P/N
+J0901（喇叭座，4pin）: pin1=VOP  pin2=VON  pin3=GND  pin4=GND
+J0902（3.5mm 耳机）:   pin3=HPH_R  pin4=HPH_L  pin2=GND
+```
+
+**BTL 输出的一端如果接到 GND（pin3/pin4），功放会被保护，
+只剩极小的失真声。** 现场就踩了这个：从「一点声都没有」重接到
+pin1/pin2 之后立刻变成「有声」，再调增益就正常了。
+
+判断接线对不对，不用拆机：
+
+```bash
+sh /opt/posture-guard/scripts/speaker_check.sh
+```
+
+它会依次打印声卡、`spk switch`/`Speaker Switch` 状态、`spk-con` GPIO、
+DAC 寄存器、PipeWire sink，最后放一段测试音。
+
+### 17.5 用麦克风客观测喇叭（避免「我觉得好像响了」）
+
+排查过程中靠人耳判断来回反复，很不可靠。板载麦克风可以当测量工具，
+**但默认采集音量是 8（-91.5dB，等于关着）**：
+
+```bash
+amixer -c 0 sget ADCL          # 默认 8 → 录出来全是 0
+amixer -c 0 sset ADCL 167      # -12dB，留余量
+amixer -c 0 sset ADCR 167
+```
+
+然后录音 + Goertzel 算 440Hz 幅值就能量化比较（`scripts/speaker_check.sh`
+里有完整实现）。实测本机：环境本底 440Hz≈0.4，正常出声 ≈15，满刻度 ≈22。
+
+---
+
+## 18. 排障常用命令
 
 ```bash
 # 环境体检（编译器/OpenCV/NPU/摄像头/部署产物）
