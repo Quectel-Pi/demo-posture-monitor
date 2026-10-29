@@ -228,11 +228,121 @@ void TestTopDownCamera() {
   Check(std::fabs(far_analyzer.HeadDownThreshold() - 0.45f) < 0.01f,
         "直视机位低头阈值被上限截到 0.45");
 
-  // 关键点明显错检（鼻子和肩线重叠）→ 才判不可用
+  // 趴桌：鼻子压到肩线之下一点（head_gap 为负）仍然有效 —— 这是要检测的姿态
+  PersonPose prone_p = p;
+  prone_p.joints[kNose] = Keypoint{330, 315, 0.9f};   // 肩线 y≈301，鼻子更靠下
+  const PostureMetrics pm = analyzer.ComputeMetrics(prone_p, 640, 480);
+  Check(pm.valid, "鼻子压到肩线之下（趴桌）仍判为有效，交给 head_down 规则");
+
+  // 只有低到胸口（-0.5 肩宽以下）才认为是错检
   PersonPose bad_p = p;
-  bad_p.joints[kNose] = Keypoint{330, 299, 0.9f};
+  bad_p.joints[kNose] = Keypoint{330, 430, 0.9f};     // 远低于肩线
   const PostureMetrics bm = analyzer.ComputeMetrics(bad_p, 640, 480);
-  Check(!bm.valid, "鼻子与肩线重叠时判为关键点错检、丢弃");
+  Check(!bm.valid, "鼻子跑到胸口位置时判为关键点错检、丢弃");
+}
+
+void TestSmoothing() {
+  std::printf("-- width_ratio 滑动中值平滑（肩点抖动不该变成距离跳变）\n");
+  Config cfg;
+  cfg.joint_confidence = 0.4f;
+  cfg.pose_confidence = 0.4f;
+  Baseline b;
+  b.valid = true;
+  b.head_offset_y = -0.30;
+  b.ear_angle_valid = true;
+  b.width_ratio = 0.42;
+  b.reference_distance_cm = 40.0;
+  PostureAnalyzer analyzer(cfg, b);
+
+  auto make = [](float sw_norm) {
+    PersonPose p{};
+    p.person_confidence = 0.9f;
+    p.box = BBox{60, 80, 520, 380};
+    p.joints[kShoulderL] = Keypoint{100, 300, 0.9f};
+    p.joints[kShoulderR] = Keypoint{100 + sw_norm * 640, 300, 0.9f};
+    p.joints[kNose] = Keypoint{100 + sw_norm * 320, 180, 0.9f};
+    p.joints[kEarL] = Keypoint{100 + sw_norm * 260, 165, 0.9f};
+    p.joints[kEarR] = Keypoint{100 + sw_norm * 380, 167, 0.9f};
+    p.joints[kWristL] = Keypoint{150, 460, 0.9f};
+    p.joints[kWristR] = Keypoint{400, 460, 0.9f};
+    return p;
+  };
+
+  SteadyTime t{};
+  // 先喂稳定帧建立窗口
+  for (int i = 0; i < 7; ++i) analyzer.Update({make(0.42f)}, t + std::chrono::seconds(i), 640, 480);
+  const auto stable = analyzer.last_metrics();
+  Check(std::fabs(stable.width_ratio - 0.42f) < 0.02f,
+        "稳定 7 帧后平滑值 ≈ 0.42（" + std::to_string(stable.width_ratio).substr(0, 5) + "）");
+  const float d_stable = stable.distance_cm_est;
+  Check(std::fabs(d_stable - 40.f) < 2.f, "距离估算 ≈ 40cm");
+
+  // 单帧离群（肩膀被检飞：0.42 → 0.62，正常会被算成近 27cm）
+  auto out = analyzer.Update({make(0.62f)}, t + std::chrono::seconds(8), 640, 480);
+  Check(std::fabs(out.metrics.width_ratio_raw - 0.62f) < 0.02f, "原始值确实跳到 0.62");
+  Check(std::fabs(out.metrics.width_ratio - 0.42f) < 0.05f,
+        "平滑后仍 ≈ 0.42（被中值滤掉）");
+  Check(std::fabs(out.metrics.distance_cm_est - 40.f) < 4.f,
+        "距离估算没有因单帧离群跳变（" +
+            std::to_string(out.metrics.distance_cm_est).substr(0, 5) + "cm）");
+
+  // 连续偏移（真的挪近了）要能跟上
+  for (int i = 0; i < 8; ++i) {
+    out = analyzer.Update({make(0.56f)}, t + std::chrono::seconds(10 + i), 640, 480);
+  }
+  Check(std::fabs(out.metrics.width_ratio - 0.56f) < 0.04f,
+        "持续偏移时平滑值跟得上（" + std::to_string(out.metrics.width_ratio).substr(0, 5) + "）");
+}
+
+void TestDistanceEstimate() {
+  std::printf("-- 离屏过近：相对基准 + 单目距离粗估\n");
+  Config cfg;
+  cfg.joint_confidence = 0.4f;
+  cfg.pose_confidence = 0.4f;
+  cfg.too_close_ratio_rel = 1.35f;
+  cfg.reference_distance_cm = 40.f;
+
+  Baseline b;
+  b.valid = true;
+  b.shoulder_angle_deg = 0.0;
+  b.head_offset_y = -0.20;
+  b.ear_angle_valid = true;
+  b.width_ratio = 0.42;              // 40cm 处实测
+  b.reference_distance_cm = 40.0;
+  PostureAnalyzer analyzer(cfg, b);
+
+  PersonPose p{};
+  p.person_confidence = 0.9f;
+  p.box = BBox{100, 80, 420, 380};
+  p.joints[kShoulderL] = Keypoint{180, 300, 0.9f};
+  p.joints[kShoulderR] = Keypoint{180 + 0.42f * 640, 300, 0.9f};   // 肩宽 = 0.42*640
+  p.joints[kNose] = Keypoint{300, 220, 0.9f};
+  p.joints[kEarL] = Keypoint{240, 205, 0.9f};
+  p.joints[kEarR] = Keypoint{330, 207, 0.9f};
+  p.joints[kWristL] = Keypoint{200, 460, 0.9f};
+  p.joints[kWristR] = Keypoint{420, 460, 0.9f};
+
+  const PostureMetrics m = analyzer.ComputeMetrics(p, 640, 480);
+  Check(std::fabs(m.width_ratio - 0.42f) < 0.01f, "肩宽占比 ≈ 0.42");
+  Check(m.distance_cm_valid, "有校准基准时给出距离估算");
+  Check(std::fabs(m.distance_cm_est - 40.0f) < 1.5f,
+        "距离估算 ≈ 40cm（实际 " + std::to_string(m.distance_cm_est).substr(0, 5) + "）");
+
+  // 靠近一倍：width_ratio 翻倍 → 估算距离减半
+  PersonPose near_p = p;
+  const float sw2 = 0.84f * 640;
+  near_p.joints[kShoulderL] = Keypoint{60, 300, 0.9f};
+  near_p.joints[kShoulderR] = Keypoint{60 + sw2, 300, 0.9f};
+  const PostureMetrics nm = analyzer.ComputeMetrics(near_p, 640, 480);
+  Check(nm.distance_cm_valid && std::fabs(nm.distance_cm_est - 20.0f) < 1.5f,
+        "肩宽翻倍时估算距离减半 ≈ 20cm（" +
+            std::to_string(nm.distance_cm_est).substr(0, 5) + "）");
+
+  // 关键：绝对值 0.75 在这个机位下要求贴脸（0.42→0.75 需近 1.77 倍 ≈ 22.6cm）；
+  // 相对倍数 1.35 才是合理的「近了 26%」
+  const float rel_th = 0.42f * 1.35f;
+  Check(rel_th < 0.75f, "相对阈值 " + std::to_string(rel_th).substr(0, 4) +
+                            " 明显严于绝对值 0.75（后者等于失效）");
 }
 
 void TestBaselineDrift() {
@@ -329,6 +439,8 @@ int main() {
   TestHoldRule();
   TestMetricsAndPlausibility();
   TestTopDownCamera();
+  TestSmoothing();
+  TestDistanceEstimate();
   TestBaselineDrift();
   TestAnalyzerObservation();
   if (g_failures == 0) {

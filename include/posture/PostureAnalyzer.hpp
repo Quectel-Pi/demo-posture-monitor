@@ -5,6 +5,7 @@
 //   ReminderManager  -> 冷却/去重/优先级后发给 Notifier
 #pragma once
 
+#include <array>
 #include <optional>
 #include <string>
 #include <vector>
@@ -129,6 +130,17 @@ class PostureAnalyzer {
   HoldRule hand_face_rule_;
 
   std::optional<SteadyTime> last_valid_at_;
+
+  // width_ratio 的滑动中值窗口。
+  // 为什么要平滑：肩宽是「左肩-右肩」两点之差，w8a8 量化下任一肩点抖动
+  // 几十像素会直接放大成 ±39% 的 width_ratio 波动（实测 0.377→0.524），
+  // 而人实际距离没变。距离是慢变量，中值滤波几乎不引入延迟但能压掉离群帧。
+  std::array<float, 7> wr_window_{};
+  int wr_count_ = 0;
+  int wr_next_ = 0;
+
+  float SmoothWidthRatio(float raw);
+  void ResetSmoother();
 };
 
 }  // namespace posture

@@ -45,6 +45,9 @@ struct Config {
   // ---- user ----
   float roi_x = 0.10f, roi_y = 0.05f, roi_w = 0.80f, roi_h = 0.90f;
   float calibration_duration_s = 5.0f;
+  // 校准时人到屏幕的参考距离（厘米）。用于把 width_ratio 换算成「估算距离」，
+  // 让界面显示人话而不是比例。不是 ToF，只是单目标定的粗估（误差 ±20~30%）。
+  float reference_distance_cm = 40.0f;
   std::string baseline_file = "/var/lib/posture-guard/baseline.json";
 
   // ---- posture（核心规则，对应 §4.2 / §4.3 / §12.2）----
@@ -76,7 +79,12 @@ struct Config {
   float head_down_hold_s = 5.0f;
   float head_tilt_deg = 18.0f;       // 鼻-肩中点连线相对基准的偏角
   float head_tilt_hold_s = 5.0f;
-  float too_close_ratio = 0.75f;     // 肩宽 / 画面宽
+  // 离屏过近：改为「相对校准基准的倍数」，与机位/FOV 无关。
+  // 绝对值（too_close_ratio）在不同摄像头 FOV 下完全不可比 ——
+  // 实测 icSpring 机位坐近是 0.78，UGREEN 俯视机位正常距离就已经 0.42。
+  // 用倍数：1.35 表示「比校准时近了 1/1.35 = 26%」。
+  float too_close_ratio_rel = 1.35f;
+  float too_close_ratio = 0.75f;     // 绝对值兜底（没有基准时用）
   float too_close_hold_s = 5.0f;
   float hand_face_ratio = 0.95f;     // 手腕-鼻子距离 / 肩宽
   float hand_face_hold_s = 5.0f;

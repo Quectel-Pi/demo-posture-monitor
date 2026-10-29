@@ -389,7 +389,8 @@ int main(int argc, char** argv) {
   }
   if (args.calibrate) {
     calibration.Start(SteadyClock::now(), camera.DeviceId(), cfg.camera_width,
-                      cfg.camera_height, engine->model_sha256());
+                      cfg.camera_height, engine->model_sha256(),
+                      cfg.reference_distance_cm);
     LOG_INFO("进入校准：请保持正常坐姿 ", static_cast<int>(cfg.calibration_duration_s),
              " 秒");
   }
@@ -593,7 +594,7 @@ int main(int argc, char** argv) {
                 std::remove(cfg.baseline_file.c_str());
                 analyzer.SetBaseline(Baseline{});
                 calibration.Start(now, camera.DeviceId(), frame.width, frame.height,
-                                  engine->model_sha256());
+                                  engine->model_sha256(), cfg.reference_distance_cm);
               } else {
                 LOG_INFO("校准基准与当前画面对得上（肩宽占比 ",
                          static_cast<double>(probe.width_ratio), "），继续使用");
@@ -614,7 +615,7 @@ int main(int argc, char** argv) {
         PostureMetrics probe;
         if (analyzer.CalibrateFeed(persons, frame.width, frame.height, &probe)) {
           calibration.Start(now, camera.DeviceId(), frame.width, frame.height,
-                            engine->model_sha256());
+                            engine->model_sha256(), cfg.reference_distance_cm);
           LOG_INFO("检测到在座用户且没有校准基准，自动开始 ",
                    static_cast<int>(cfg.calibration_duration_s), " 秒校准");
         }
@@ -729,7 +730,7 @@ int main(int argc, char** argv) {
           reminders.ClearSnooze();
         } else if (cmd.name == "calibrate") {
           calibration.Start(now, camera.DeviceId(), frame.width, frame.height,
-                            engine->model_sha256());
+                            engine->model_sha256(), cfg.reference_distance_cm);
           LOG_INFO("界面请求重新校准，请保持正常坐姿 ",
                    static_cast<int>(cfg.calibration_duration_s), " 秒");
         } else if (cmd.name == "quit") {

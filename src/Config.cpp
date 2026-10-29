@@ -46,6 +46,8 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
   }
   c.calibration_duration_s =
       static_cast<float>(yaml.Num("user.calibration_duration_s", c.calibration_duration_s));
+  c.reference_distance_cm = static_cast<float>(
+      yaml.Num("user.reference_distance_cm", c.reference_distance_cm));
   c.baseline_file = yaml.Str("user.baseline_file", c.baseline_file);
   c.calibrate_on_start = yaml.Bool("user.calibrate_on_start", c.calibrate_on_start);
 
@@ -74,6 +76,8 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
   c.head_tilt_deg = static_cast<float>(yaml.Num("posture.head_tilt_deg", c.head_tilt_deg));
   c.head_tilt_hold_s =
       static_cast<float>(yaml.Num("posture.head_tilt_hold_s", c.head_tilt_hold_s));
+  c.too_close_ratio_rel = static_cast<float>(
+      yaml.Num("posture.too_close_ratio_rel", c.too_close_ratio_rel));
   c.too_close_ratio =
       static_cast<float>(yaml.Num("posture.too_close_ratio", c.too_close_ratio));
   c.too_close_hold_s =
@@ -146,7 +150,8 @@ std::string Config::Describe() const {
      << recovery_hold_s << "s missing_timeout=" << missing_data_timeout_s << "s\n";
   os << "approx: head_down_drop_ratio=" << head_down_drop_ratio << " (min "
      << head_down_drop_min << " max " << head_down_drop_max << ")"
-     << " head_tilt_deg=" << head_tilt_deg << " too_close_ratio=" << too_close_ratio
+     << " head_tilt_deg=" << head_tilt_deg << " too_close_rel=" << too_close_ratio_rel
+     << " (abs " << too_close_ratio << ")"
      << " hand_face_ratio=" << hand_face_ratio << "\n";
   os << "eye_care: use=" << continuous_use_s << "s far_look=" << far_look_s
      << "s presence=" << presence_confirm_s << "s absent=" << absent_confirm_s

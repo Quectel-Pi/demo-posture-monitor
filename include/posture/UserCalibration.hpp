@@ -24,7 +24,8 @@ class UserCalibration {
                            std::string* err);
 
   void Start(SteadyTime now, const std::string& camera_id, int frame_width,
-             int frame_height, const std::string& model_sha256);
+             int frame_height, const std::string& model_sha256,
+             double reference_distance_cm = 0.0);
   void Cancel();
 
   bool active() const { return active_; }
@@ -65,6 +66,7 @@ class UserCalibration {
   int frame_width_ = 0;
   int frame_height_ = 0;
   std::string model_sha256_;
+  double reference_distance_cm_ = 0.0;
 };
 
 }  // namespace posture

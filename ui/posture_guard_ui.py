@@ -274,7 +274,7 @@ def build_ui(windowed: bool, socket_path: str):
             for key, name in (("shoulder_angle_deg", "肩线偏角"),
                               ("shoulder_tilt_dev", "偏离基准"),
                               ("head_offset_y", "头肩纵向"),
-                              ("width_ratio", "肩宽占比")):
+                              ("distance_cm_est", "估算距离")):
                 row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
                 k = Gtk.Label(label=name, xalign=0)
                 k.add_css_class("metric-key")
@@ -439,8 +439,13 @@ def build_ui(windowed: bool, socket_path: str):
                 f"{m.get('shoulder_tilt_dev', 0):.1f}°")
             self.metric_vals["head_offset_y"].set_text(
                 f"{m.get('head_offset_y', 0):.2f}")
-            self.metric_vals["width_ratio"].set_text(
-                f"{m.get('width_ratio', 0):.2f}")
+            self.metric_vals["shoulder_tilt_dev"].set_text(
+                f"{m.get('shoulder_tilt_dev', 0):.1f}°")
+            if m.get("distance_cm_valid"):
+                self.metric_vals["distance_cm_est"].set_text(
+                    f"{m.get('distance_cm_est', 0):.0f} cm")
+            else:
+                self.metric_vals["distance_cm_est"].set_text("--")
 
             use = int(m.get("use_s", 0))
             self.lbl_use.set_text(f"{use // 60:02d}:{use % 60:02d}")

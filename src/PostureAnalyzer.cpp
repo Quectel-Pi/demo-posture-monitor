@@ -156,10 +156,17 @@ PostureAnalyzer::PostureAnalyzer(const Config& cfg, const Baseline& baseline)
                                   std::fabs(static_cast<float>(baseline.head_offset_y))))
           : cfg.head_down_drop_legacy;
   head_down_rule_.SetTrigger(drop, drop * 0.5f);
+
+  float close_th = cfg.too_close_ratio;
+  if (baseline.valid && baseline.width_ratio > 0.001) {
+    close_th = static_cast<float>(baseline.width_ratio * cfg.too_close_ratio_rel);
+  }
+  too_close_rule_.SetTrigger(close_th, close_th * 0.92f);
 }
 
 void PostureAnalyzer::SetBaseline(const Baseline& baseline) {
   baseline_ = baseline;
+  ResetSmoother();
   // 低头阈值随基准的头肩距离缩放：俯视机位基准只有 -0.20 肩宽，
   // 固定 0.35 的阈值在那里永远达不到（鼻子压到肩线上最多降 0.20）。
   float drop = cfg_.head_down_drop_legacy;
@@ -168,10 +175,37 @@ void PostureAnalyzer::SetBaseline(const Baseline& baseline) {
     drop = std::max(cfg_.head_down_drop_min, std::min(cfg_.head_down_drop_max, drop));
   }
   head_down_rule_.SetTrigger(drop, drop * 0.5f);
+
+  // 离屏过近：同样改成「相对基准」。
+  // 绝对值 0.75 在俯视机位下要求人脸贴屏幕（实测基准 0.42 → 需 ×1.77），
+  // 而在直视机位基准 0.11 时又永远达不到 —— 绝对值注定失效。
+  float close_th = cfg_.too_close_ratio;
+  if (baseline_.valid && baseline_.width_ratio > 0.001) {
+    close_th = static_cast<float>(baseline_.width_ratio * cfg_.too_close_ratio_rel);
+  }
+  too_close_rule_.SetTrigger(close_th, close_th * 0.92f);   // 迟滞恢复带宽 8%
   ResetRules();
 }
 
 float PostureAnalyzer::HeadDownThreshold() const { return head_down_rule_.trigger(); }
+
+float PostureAnalyzer::SmoothWidthRatio(float raw) {
+  if (raw <= 0.f) return wr_count_ > 0 ? wr_window_[(wr_next_ + 7 - 1) % 7] : 0.f;
+  wr_window_[wr_next_] = raw;
+  wr_next_ = (wr_next_ + 1) % 7;
+  if (wr_count_ < 7) ++wr_count_;
+  // 取窗口内中位数：抗离群（单帧把肩膀检飞不会带偏结果）
+  std::array<float, 7> sorted = wr_window_;
+  const int n = std::min(wr_count_, 7);
+  std::sort(sorted.data(), sorted.data() + n);
+  return sorted[static_cast<size_t>(n / 2)];
+}
+
+void PostureAnalyzer::ResetSmoother() {
+  wr_count_ = 0;
+  wr_next_ = 0;
+  wr_window_.fill(0.f);
+}
 
 void PostureAnalyzer::ResetRules() {
   shoulder_rule_.Reset();
@@ -264,6 +298,14 @@ PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int fra
   }
   m.width_ratio = frame_width > 0 ? sw / static_cast<float>(frame_width) : 0.f;
 
+  // 单目距离粗估：Z = K / width_ratio，K = 校准距离 × 校准时的 width_ratio
+  if (baseline_.valid && baseline_.width_ratio > 0.001 &&
+      baseline_.reference_distance_cm > 0.0 && m.width_ratio > 0.001f) {
+    const double K = baseline_.reference_distance_cm * baseline_.width_ratio;
+    m.distance_cm_est = static_cast<float>(K / m.width_ratio);
+    m.distance_cm_valid = true;
+  }
+
   // 托腮：两只手腕里离鼻子更近的那个。
   // ★ 但只有「手腕抬到肩线之上」才算 —— 坐在桌前打字时，手在桌面上，
   //   图像里离胸/脸并不远（俯视机位尤其明显），不加上这个门控会一直误报托腮。
@@ -301,10 +343,14 @@ PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int fra
   }
   // 鼻子到肩线的距离：只做「模型明显检错」的兜底，不做「机位好坏」的判据。
   // 俯视机位下这个量天然偏小，低头时会进一步压到肩线上 —— 那是要检测的信号，
-  // 不是要丢弃的坏帧（之前设 0.22 把低头帧全扔了，详见 docs/troubleshooting.md）。
+  // 不是要丢弃的坏帧（之前设 0.22 把低头帧全扔了）。
+  //
+  // 下限是负的：鼻子压到肩线**之下**（head_gap < 0）正是「趴桌」的几何表现，
+  // 必须留给 head_down 规则去判。只有低到 -0.5 肩宽（鼻子跑到胸口）才认为是错检。
   const float head_gap = (sy - nose.y) / sw;
-  if (head_gap < cfg_.min_head_gap) {
-    m.invalid_reason = "鼻子与肩线重叠（疑似关键点错检）";
+  const float hard_floor = -0.5f;
+  if (head_gap < hard_floor) {
+    m.invalid_reason = "鼻子明显低于肩线（疑似关键点错检）";
     return m;
   }
   m.valid = true;
@@ -454,7 +500,7 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
     return obs;
   }
 
-  const PostureMetrics m = ComputeMetrics(*sel.person, frame_width, frame_height);
+  PostureMetrics m = ComputeMetrics(*sel.person, frame_width, frame_height);
   if (!Plausible(m, *sel.person, frame_width, frame_height)) {
     last_metrics_ = PostureMetrics{};
     if (last_valid_at_ && SecondsBetween(*last_valid_at_, now) > cfg_.missing_data_timeout_s) {
@@ -464,6 +510,17 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
     obs.metrics = m;
     obs.explanation = m.valid ? "几何特征不合理，丢弃本帧" : m.invalid_reason;
     return obs;
+  }
+
+  // 距离相关用平滑后的 width_ratio，其余量保持原始（姿态变化需要即时响应）
+  m.width_ratio_raw = m.width_ratio;
+  m.width_ratio = SmoothWidthRatio(m.width_ratio_raw);
+  // 重算估算距离（用平滑值）
+  if (baseline_.valid && baseline_.width_ratio > 0.001 &&
+      baseline_.reference_distance_cm > 0.0 && m.width_ratio > 0.001f) {
+    const double K = baseline_.reference_distance_cm * baseline_.width_ratio;
+    m.distance_cm_est = static_cast<float>(K / m.width_ratio);
+    m.distance_cm_valid = true;
   }
 
   last_metrics_ = m;

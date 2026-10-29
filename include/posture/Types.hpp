@@ -111,7 +111,13 @@ struct PostureMetrics {
   float shoulder_width_px = 0.f;
   float head_offset_x = 0.f;             // (鼻子X - 肩中点X) / 肩宽
   float head_offset_y = 0.f;             // (鼻子Y - 肩中点Y) / 肩宽
-  float width_ratio = 0.f;               // 肩宽 / 画面宽（距离启发式）
+  float width_ratio = 0.f;               // 肩宽 / 画面宽（已做滑动中值平滑）
+  float width_ratio_raw = 0.f;           // 未平滑值（诊断用）
+  // 单目标定的「估算距离」（厘米）。用 针孔模型 Z = K / width_ratio，
+  // K 来自校准时的已知距离。误差 ±20~30%（肩宽个体差异、转头、广角畸变），
+  // 只适合粗略提示，不是 ToF 那种测量精度。
+  float distance_cm_est = 0.f;
+  bool distance_cm_valid = false;
   float wrist_to_nose = 0.f;             // 手腕到鼻子距离 / 肩宽（托腮）
   // 歪头判据：左右耳连线相对水平的角度。
   // 不用「肩中点->鼻子」的偏角 —— 俯视机位下 sy-nose.y 很小（分母趋零），
@@ -150,6 +156,7 @@ struct Baseline {
   double ear_angle_deg = 0.0;
   bool ear_angle_valid = false;   // 校准时耳朵是否可信（不可信则不用耳线判歪头）
   double width_ratio = 0.0;
+  double reference_distance_cm = 0.0;   // 校准时机位到人的预估距离（用于粗估当前距离）
   int samples = 0;
   int frame_width = 0;
   int frame_height = 0;
