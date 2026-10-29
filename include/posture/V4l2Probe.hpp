@@ -67,4 +67,33 @@ CaptureChoice ChooseCapture(const V4l2Capabilities& caps, const CaptureRequest& 
 
 const char* FourccToString(std::uint32_t fourcc, char out[5]);
 
+// ---------------------------------------------------------------------------
+// V4L2 控件（焦距/曝光等）
+//
+// 为什么要单独写这个：OpenCV 的 CAP_PROP_* 不支持 UVC 的 focus_absolute，
+// 而电动对焦的 UVC 摄像头（本项目这块 UGREEN 1080P）必须显式锁定焦距，
+// 否则「连续自动对焦」会每帧微调镜头，导致画面持续轻微失焦 —— 实测
+// 同一位置 AF 开着时清晰度只有锁死时的 1/8（见 docs/calibration.md §焦距）。
+//
+// 注意：控件设置在设备内持久保存（v4l2-ctl 关掉重开仍然有效），所以可以在
+// cv::VideoCapture::open() **之前** 用临时 fd 写好，再交给 OpenCV 去流化。
+// ---------------------------------------------------------------------------
+struct V4l2ControlValue {
+  std::uint32_t id = 0;
+  int value = 0;
+};
+
+// 控件名 -> V4L2_CID_*（支持 focus_absolute / focus_automatic_continuous /
+// exposure_auto / exposure_time_absolute / sharpness 等常用项）
+std::uint32_t ResolveControlId(const std::string& name);
+
+// 读取一个控件当前值，失败返回 -1
+int GetV4l2Control(const std::string& device, const std::string& name);
+
+// 写入一批控件。成功返回 true，失败原因写到 err。
+// order 很重要：先 focus_automatic_continuous=0 再 focus_absolute=N，
+// 反了会被 AF 立刻覆盖回去。
+bool SetV4l2Controls(const std::string& device,
+                     const std::vector<V4l2ControlValue>& values, std::string* err);
+
 }  // namespace posture

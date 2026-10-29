@@ -26,6 +26,11 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
   c.camera_reconnect_backoff_max_s = static_cast<float>(
       yaml.Num("camera.reconnect_backoff_max_s", c.camera_reconnect_backoff_max_s));
 
+  c.focus_autofocus = yaml.Bool("camera.focus_autofocus", c.focus_autofocus);
+  c.focus_absolute = yaml.Int("camera.focus_absolute", c.focus_absolute);
+  c.exposure_time_absolute =
+      yaml.Int("camera.exposure_time_absolute", c.exposure_time_absolute);
+
   c.model_path = yaml.Str("models.pose", c.model_path);
   c.pose_confidence = static_cast<float>(yaml.Num("models.pose_confidence", c.pose_confidence));
   c.joint_confidence =
@@ -121,6 +126,9 @@ std::string Config::Describe() const {
   os << "camera=" << camera_device << " " << camera_width << "x" << camera_height
      << "@" << capture_fps << "fps infer=" << infer_fps << "fps fmt="
      << preferred_pixel_format << "\n";
+  os << "focus: autofocus=" << (focus_autofocus ? "on" : "off")
+     << " absolute=" << focus_absolute
+     << " exposure=" << exposure_time_absolute << "\n";
   os << "model=" << model_path << " pose_conf=" << pose_confidence
      << " joint_conf=" << joint_confidence << "\n";
   os << "roi=" << roi_x << "," << roi_y << "," << roi_w << "," << roi_h << "\n";

@@ -319,7 +319,37 @@ AttributeError: 'gi.repository.Gdk' object has no attribute 'cairo_set_source_pa
 
 ---
 
-## 14. 排障常用命令
+## 14. 画面看着"糊"，或者关键点老是抖
+
+**症状**：画面能出来，但边缘发软、细节不清；关键点坐标帧间抖动明显。
+
+**根因 A：摄像头在跑「连续自动对焦」**。UVC 的
+`focus_automatic_continuous=1` 会让镜头每帧微调，逐帧看就是持续轻微失焦。
+实测同一位置，AF 开着时清晰度只有锁死时的 1/8。
+
+**根因 B：焦点根本没见过你的位置**。很多自动对焦 UVC 的出厂默认焦点并不在
+工位距离上。本项目这块 UGREEN 1080P 默认 `focus_absolute=160`，实测清晰度 341；
+改成实测最佳的 70 后是 637（**1.87×**）。
+
+**修法**：
+
+```bash
+bash /opt/posture-guard/scripts/focus.sh --scan     # 扫最佳值
+# 写进配置
+#   camera: { focus_autofocus: false, focus_absolute: 70 }
+sudo systemctl restart posture-guard
+# 确认：
+journalctl -u posture-guard | grep 对焦
+```
+
+**根因 C：清晰度测出来自相矛盾** → 人在动。扫描必须多轮交错 + 每档取最优帧 +
+设完等马达停稳，否则姿态漂移会盖过焦距差异（这条踩过，见
+`docs/calibration.md` §4.5 末尾）。
+
+**注意**：定焦摄像头没有 `focus_absolute`，脚本会直接告诉你调不了；
+这种情况只能整体挪动机位，或手拧镜头前端的对焦环（部分型号有）。
+
+## 15. 排障常用命令
 
 ```bash
 # 环境体检（编译器/OpenCV/NPU/摄像头/部署产物）

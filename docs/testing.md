@@ -76,6 +76,24 @@ python3 tests/compare_onnx.py samples/bus.jpg bus_cpp.json
 对照：同一模型在本机用 ONNX Runtime CPU 跑是 **331–401 ms/帧**（6~8 线程），
 NPU 快 16–19 倍。
 
+## 3.5 焦距锁定（换摄像头必做）
+
+```bash
+bash scripts/focus.sh --scan              # 找最佳 focus_absolute
+# 写入 config/posture.yaml → systemctl restart posture-guard
+journalctl -u posture-guard | grep 对焦    # 对焦已锁定：autofocus=0 focus_absolute=70
+```
+
+实测（UGREEN 1080P，人距约 40cm，3 轮交错取最优帧）：
+
+| 设置 | 清晰度 |
+|---|---|
+| `focus_absolute=160`（设备默认） | 341 |
+| `focus_absolute=70`（锁定） | **637**（1.87×） |
+
+整机 reboot 后 `v4l2-ctl --get-ctrl` 仍为 `focus_automatic_continuous: 0` /
+`focus_absolute: 70`，说明配置持久生效。
+
 ## 4. 功能验收（现场）
 
 | 用例 | 条件 | 预期 | 本机结果 |

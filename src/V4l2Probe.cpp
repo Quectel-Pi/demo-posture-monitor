@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <map>
 #include <cctype>
 #include <cerrno>
 #include <cmath>
@@ -31,6 +32,64 @@ const char* FourccToString(std::uint32_t fourcc, char out[5]) {
   // 去掉尾部空格，方便比较
   for (int i = 3; i >= 0 && out[i] == ' '; --i) out[i] = '\0';
   return out;
+}
+
+std::uint32_t ResolveControlId(const std::string& name) {
+  static const std::map<std::string, std::uint32_t> kMap = {
+      {"focus_automatic_continuous", V4L2_CID_FOCUS_AUTO},
+      {"focus_absolute", V4L2_CID_FOCUS_ABSOLUTE},
+      {"exposure_auto", V4L2_CID_EXPOSURE_AUTO},
+      {"exposure_time_absolute", V4L2_CID_EXPOSURE_ABSOLUTE},
+      {"white_balance_automatic", V4L2_CID_AUTO_WHITE_BALANCE},
+      {"white_balance_temperature", V4L2_CID_WHITE_BALANCE_TEMPERATURE},
+      {"brightness", V4L2_CID_BRIGHTNESS},
+      {"contrast", V4L2_CID_CONTRAST},
+      {"saturation", V4L2_CID_SATURATION},
+      {"gamma", V4L2_CID_GAMMA},
+      {"gain", V4L2_CID_GAIN},
+      {"sharpness", V4L2_CID_SHARPNESS},
+      {"backlight_compensation", V4L2_CID_BACKLIGHT_COMPENSATION},
+      {"power_line_frequency", V4L2_CID_POWER_LINE_FREQUENCY},
+  };
+  const auto it = kMap.find(name);
+  return it == kMap.end() ? 0u : it->second;
+}
+
+int GetV4l2Control(const std::string& device, const std::string& name) {
+  const std::uint32_t id = ResolveControlId(name);
+  if (!id) return -1;
+  const int fd = ::open(device.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC);
+  if (fd < 0) return -1;
+  v4l2_control c{};
+  c.id = id;
+  const int rc = ioctl(fd, VIDIOC_G_CTRL, &c);
+  ::close(fd);
+  return rc == 0 ? c.value : -1;
+}
+
+bool SetV4l2Controls(const std::string& device,
+                     const std::vector<V4l2ControlValue>& values, std::string* err) {
+  if (values.empty()) return true;
+  const int fd = ::open(device.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC);
+  if (fd < 0) {
+    if (err) *err = "打开 " + device + " 失败: " + std::strerror(errno);
+    return false;
+  }
+  bool ok = true;
+  for (const auto& v : values) {
+    v4l2_control c{};
+    c.id = v.id;
+    c.value = v.value;
+    if (ioctl(fd, VIDIOC_S_CTRL, &c) != 0) {
+      ok = false;
+      if (err) {
+        *err = "设置控件 0x" + std::to_string(v.id) + "=" + std::to_string(v.value) +
+               " 失败: " + std::strerror(errno);
+      }
+    }
+  }
+  ::close(fd);
+  return ok;
 }
 
 V4l2Capabilities ProbeV4l2(const std::string& device) {

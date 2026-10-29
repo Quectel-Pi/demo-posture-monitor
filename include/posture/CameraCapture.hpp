@@ -42,6 +42,7 @@ class CameraCapture {
 
  private:
   bool TryOpen(std::string* err);
+  void ApplyControls();
   static std::string ResolveStablePath(const std::string& device);
   // 把 /dev/videoN 或 by-id 链接解析成 OpenCV 需要的 V4L2 索引
   static int DeviceIndex(const std::string& device);

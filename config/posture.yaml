@@ -8,7 +8,9 @@ version: 1
 camera:
   # 板端 UVC 节点不一定是 video0：用 scripts/smoke_camera.sh 查实际节点，
   # 优先写 /dev/v4l/by-id/... 稳定路径（热插拔后不换号）
-  device: "/dev/video73"
+  # 优先用 /dev/v4l/by-id/... 稳定路径：热插拔后 videoN 会换号，by-id 不会
+  # 换摄像头后这里要跟着改（bash scripts/focus.sh --info 可查当前节点）
+  device: "/dev/v4l/by-id/usb-UGREEN_Camera_1080P_UGREEN_Camera_1080P_SN0001-video-index0"
   width: 640
   height: 480
   capture_fps: 20
@@ -16,6 +18,17 @@ camera:
   # auto = 用设备实际支持的最好格式（有 MJPG 就用 MJPG 省 USB 带宽，否则用设备给的第一个）
   # 也可以写死 "MJPG" / "YUYV" 强制某一种（不支持时会自动回退并打 WARN）
   preferred_pixel_format: "auto"
+  # ---- 电动对焦锁定 ----
+  # 连续自动对焦会让镜头每帧微调 → 画面持续轻微失焦（实测清晰度只有锁死时的 1/8）。
+  # 固定工位必须关掉，锁一个实测值。用 bash scripts/focus.sh --scan 现场测。
+  # focus_absolute 取值依设备而定；本机（UGREEN 1080P，人距 40cm）：
+  #   20~120 都清晰，160 明显变糊，250 以上全糊 → 取区间中间 70。
+  focus_autofocus: false
+  focus_absolute: 70
+
+  # 曝光：-1 = 保持设备自动曝光。若现场有强烈逆光/频闪，可改成手动固定值（微秒）
+  exposure_time_absolute: -1
+
   reconnect_backoff_s: 1.0
   reconnect_backoff_max_s: 15.0
 

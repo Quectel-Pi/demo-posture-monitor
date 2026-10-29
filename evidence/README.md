@@ -11,6 +11,8 @@
 | `m2-compare-onnx.txt` | 与 ONNX fp32 参考逐点比对（zidane / bus / 现场真实帧） | 三例全部 **PASS**，关键点平均误差 **17.2 / 17.2 / 12.0 px**，匹配率 100% |
 | `metrics-live.txt` | 现场连续采样 6 次（2 秒一次） | NPU 17–19ms/帧、6.6–6.9 fps、`keypoints_valid` 随是否有人正确翻转 |
 | `status-sample.json` | 一帧完整状态快照（socket 原始 JSON） | 字段齐全，可直接给 UI 或外部消费 |
+| `focus-measurements.txt` | 焦距扫描 / AF 对比 / A-B 实测原始数据 | 锁定 70 相对设备默认 160 清晰度 **1.87×** |
+| `03-ui-focus-locked.png` | 锁定焦距后的界面截图 | 画面区 Laplacian 555、160923 色 |
 
 ## 关键数字
 

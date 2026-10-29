@@ -1,0 +1,56 @@
+# 摄像头焦距标定实测（2026-10-29，UGREEN Camera 1080P，人距约 40cm）
+
+设备：/dev/v4l/by-id/usb-UGREEN_Camera_1080P_UGREEN_Camera_1080P_SN0001-video-index0
+能力：MJPG / YUYV，320x240 … 1920x1080
+控件：focus_absolute (0..1023, 默认 160)、focus_automatic_continuous
+
+## 1. 焦距扫描（3 轮交错，每档取最优帧，避开姿态漂移）
+
+  focus | 清晰度(最优帧) | 说明
+  ------+---------------+------------------------------------------
+     20 |           602 | 清晰
+     30 |           547 | 清晰
+     40 |           503 | 清晰
+     50 |           486 | 清晰
+     60 |           480 | 清晰
+     70 |           449 | 清晰  ← 采用值（区间中心，前后留余量）
+     80 |           442 | 清晰
+    100 |           442 | 清晰
+    120 |           441 | 清晰
+    160 |           215 | 明显变糊（★ 设备默认值，改之前一直在用）
+    250 |            40 | 基本全糊
+    400 |            12 |
+    600 |             5 |
+   1023 |             4 |
+
+  结论：20~120 是平坦的「够清晰」区间；160 起明显变糊，250 以上完全散焦。
+
+## 2. 自动对焦 vs 锁定（同一位置）
+
+  AF 开着（focus_automatic_continuous=1）：
+    3 轮清晰度 52.8 / 61.0 / 60.8   （镜头每帧微调 → 持续轻微失焦）
+    AF 自己收敛到 focus_absolute=70
+  关闭 AF 并锁定 70：清晰度 470.9（同一次测量）
+  → AF 关掉是必要的
+
+## 3. A/B：设备默认 160 vs 锁定 70（3 轮交错，每档取最优帧）
+
+  focus=160（改之前，设备默认）: 341 / 334 / 323  → 341
+  focus= 70（现在，锁定）      : 635 / 616 / 637  → 637
+  → 清晰度提升 1.87×
+
+## 4. 持久性
+
+  整机 reboot 后：
+    $ v4l2-ctl -d /dev/video73 --get-ctrl focus_automatic_continuous,focus_absolute
+      focus_automatic_continuous: 0
+      focus_absolute: 70
+    journalctl: 「对焦已锁定：autofocus=0 focus_absolute=70」
+    journalctl: 「摄像头已打开 … 实际 640x480@20fps 格式 MJPG（请求 640x480 MJPG）」
+  → 配置持久生效；同时自动协商选到了 MJPG（比 YUV 省 USB 带宽）
+
+## 5. 复现
+
+  bash scripts/focus.sh --info      # 看有没有电动对焦、当前值
+  bash scripts/focus.sh --scan      # 扫描找最佳值（人要保持坐姿）
+  bash scripts/focus.sh --measure   # 只测当前清晰度

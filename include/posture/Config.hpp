@@ -23,6 +23,17 @@ struct Config {
   int infer_fps = 8;
   std::string preferred_pixel_format = "MJPEG";
   float camera_reconnect_backoff_s = 1.0f;
+
+  // 电动对焦 UVC 的焦距锁定。连续自动对焦会让镜头每帧微调，
+  // 画面持续轻微失焦（实测清晰度只有锁死时的 1/8），必须关掉。
+  // focus_absolute 的取值范围依设备而定（0..1023），用
+  //   bash scripts/focus.sh --scan
+  // 现场测出最佳值再填进来；-1 表示「不干预，保持设备默认」。
+  bool focus_autofocus = false;
+  int focus_absolute = -1;
+  // 曝光同理：自动曝光在人在/人走时会来回调，导致亮度跳变影响关键点。
+  // -1 表示不干预。
+  int exposure_time_absolute = -1;
   float camera_reconnect_backoff_max_s = 15.0f;
 
   // ---- models ----

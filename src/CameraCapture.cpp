@@ -41,6 +41,54 @@ CameraCapture::CameraCapture(const Config& cfg)
 
 CameraCapture::~CameraCapture() { Close(); }
 
+void CameraCapture::ApplyControls() {
+  std::vector<V4l2ControlValue> values;
+
+  if (cfg_.focus_absolute >= 0 || !cfg_.focus_autofocus) {
+    // 关闭连续自动对焦：它会让镜头每帧微调，画面持续轻微失焦
+    const std::uint32_t af_id = ResolveControlId("focus_automatic_continuous");
+    if (af_id) {
+      values.push_back({af_id, cfg_.focus_autofocus ? 1 : 0});
+    }
+    if (cfg_.focus_absolute >= 0) {
+      const std::uint32_t fa_id = ResolveControlId("focus_absolute");
+      if (fa_id) values.push_back({fa_id, cfg_.focus_absolute});
+    }
+  }
+  if (cfg_.exposure_time_absolute >= 0) {
+    // 手动曝光要先把 auto_exposure 从 Aperture Priority(3) 切到 Manual(1)
+    const std::uint32_t ea_id = ResolveControlId("exposure_auto");
+    const std::uint32_t et_id = ResolveControlId("exposure_time_absolute");
+    if (ea_id) values.push_back({ea_id, 1});
+    if (et_id) values.push_back({et_id, cfg_.exposure_time_absolute});
+  }
+
+  if (values.empty()) return;
+
+  std::string err;
+  if (!SetV4l2Controls(cfg_.camera_device, values, &err)) {
+    LOG_WARN("摄像头控件设置失败（", err, "），将使用设备默认值");
+    return;
+  }
+  // 回读确认：不同设备对非法值会静默截断，必须看实际生效值
+  const int af = GetV4l2Control(cfg_.camera_device, "focus_automatic_continuous");
+  const int fa = GetV4l2Control(cfg_.camera_device, "focus_absolute");
+  const int et = GetV4l2Control(cfg_.camera_device, "exposure_time_absolute");
+  if (af >= 0 && fa >= 0) {
+    LOG_INFO("对焦已锁定：autofocus=", af, " focus_absolute=", fa,
+             cfg_.focus_absolute >= 0 && fa != cfg_.focus_absolute
+                 ? ("（请求 " + std::to_string(cfg_.focus_absolute) + "，设备截断为 " +
+                    std::to_string(fa) + "）")
+                 : "");
+  } else {
+    LOG_INFO("该摄像头没有电动对焦控件（focus_absolute 不可用），跳过");
+  }
+  // 只有真的手动设了曝光才报，否则会显得"好像改了曝光"
+  if (cfg_.exposure_time_absolute >= 0 && et > 0) {
+    LOG_INFO("曝光已锁定：exposure_time_absolute=", et);
+  }
+}
+
 int CameraCapture::DeviceIndex(const std::string& device) {
   // 跟随符号链接拿到真实节点，再取尾部数字
   char resolved[512] = {0};
@@ -80,6 +128,11 @@ bool CameraCapture::TryOpen(std::string* err) {
     if (err) *err = "无法从 " + cfg_.camera_device + " 解析出 V4L2 索引";
     return false;
   }
+  // ---- 先锁焦距/曝光，再开流 ----
+  // 必须在 cv::VideoCapture::open() 之前做：UVC 控件在设备内持久保存，
+  // 用临时 fd 写好后 OpenCV 直接继承；开流之后再写就需要第二把锁。
+  ApplyControls();
+
   // ---- 先问设备支持什么，再决定请求什么（而不是硬编码）----
   CaptureRequest want;
   want.width = cfg_.camera_width;

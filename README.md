@@ -21,6 +21,7 @@ GTK4 界面**，两个进程通过本地 socket 通信。
 | 离屏过近 | 肩宽/画面宽 > 0.75 持续 5s（趋势，非厘米） | ✅ |
 | 屏幕提醒 | 全屏**摄像头实时画面** + 骨架叠加 + 红/绿状态 + 顶部横幅 | ✅ |
 | 摄像头适配 | 启动时 `VIDIOC_ENUM_*` 枚举格式/分辨率/帧率后协商，不硬编码 | ✅ |
+| 焦距锁定 | 关掉连续自动对焦并锁实测值（清晰度 1.87×）；`scripts/focus.sh --scan` | ✅ |
 | 累计时长 | 每日在座/不良秒数 + 提醒次数，JSONL 持久化 | ✅ |
 | 20-20-20 护眼 | 连续用眼 20 分钟 → 全屏「远眺 20 秒」倒计时 | ✅ |
 | 个人校准 | 自动采集 5 秒正常坐姿 → 中位数基准（带离群过滤） | ✅ |
@@ -54,7 +55,12 @@ adb shell 'sudo -u quectel env XDG_RUNTIME_DIR=/run/user/1000 \
   bash /opt/posture-guard/scripts/install_ui_autostart.sh'
 ```
 
-第一次使用：让人坐到摄像头前保持正常坐姿 5 秒，程序自动校准并保存基准。
+第一次使用：
+
+1. **先定好焦**：`bash scripts/focus.sh --scan` 扫出最佳焦距，写进配置后重启服务。
+   自动对焦摄像头的连续 AF 会让画面持续轻微失焦（实测清晰度差 8 倍），
+   而且出厂默认焦点往往不在工位距离上（实测换焦距后清晰度 1.87×）。
+2. 让人坐到摄像头前保持正常坐姿 5 秒，程序自动校准并保存基准。
 
 ## 实测数据
 
@@ -87,7 +93,7 @@ ui/posture_guard_ui.py      # GTK4 全屏界面（用户会话，订阅 socket�
 config/posture.yaml         # 运行配置
 systemd/posture-guard.service
 scripts/                    # check_board / smoke_camera / build_board / deploy
-                            # verify / status / calibrate / snooze / screenshot
+                            # verify / status / calibrate / snooze / screenshot / focus
                             # install_ui_autostart / fetch_deps
 tests/                      # test_posture_rules / test_session_timer / test_config
                             # compare_onnx.py（M2 验收）
