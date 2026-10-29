@@ -59,6 +59,7 @@ HoldRule::Result HoldRule::Update(std::optional<float> value, SteadyTime now) {
   }
   res.valid = true;
   const float v = *value;
+  res.value = v;
   const bool above = cfg_.higher_is_bad ? (v > cfg_.trigger) : (v < cfg_.trigger);
   const bool below_recover =
       cfg_.higher_is_bad ? (v < cfg_.recover) : (v > cfg_.recover);
@@ -92,6 +93,12 @@ HoldRule::Result HoldRule::Update(std::optional<float> value, SteadyTime now) {
   res.latched = latched_;
   if (!res.just_activated) {
     res.active_s = latched_at_ ? SecondsBetween(*latched_at_, now) : 0.0;
+  }
+  // 计时进度：激活后看激活时长，未激活时看「越线已持续多久」
+  if (latched_ && latched_at_) {
+    res.held_s = SecondsBetween(*latched_at_, now);
+  } else if (abnormal_since_) {
+    res.held_s = SecondsBetween(*abnormal_since_, now);
   }
   return res;
 }
@@ -148,12 +155,16 @@ PostureAnalyzer::PostureAnalyzer(const Config& cfg, const Baseline& baseline)
                        .higher_is_bad = false,   // 距离越小越可疑
                        .priority = 60}) {
   // 构造时传入的基准也要参与阈值缩放
+  double ref0 = 0.0;
+  if (baseline.valid) {
+    ref0 = baseline.ear_mid_valid ? std::fabs(baseline.ear_mid_offset_y)
+                                  : std::fabs(baseline.head_offset_y);
+  }
   const float drop =
-      (baseline.valid && std::fabs(baseline.head_offset_y) > 0.02)
+      ref0 > 0.02
           ? std::max(cfg.head_down_drop_min,
                      std::min(cfg.head_down_drop_max,
-                              cfg.head_down_drop_ratio *
-                                  std::fabs(static_cast<float>(baseline.head_offset_y))))
+                              cfg.head_down_drop_ratio * static_cast<float>(ref0)))
           : cfg.head_down_drop_legacy;
   head_down_rule_.SetTrigger(drop, drop * 0.5f);
 
@@ -170,8 +181,16 @@ void PostureAnalyzer::SetBaseline(const Baseline& baseline) {
   // 低头阈值随基准的头肩距离缩放：俯视机位基准只有 -0.20 肩宽，
   // 固定 0.35 的阈值在那里永远达不到（鼻子压到肩线上最多降 0.20）。
   float drop = cfg_.head_down_drop_legacy;
-  if (baseline_.valid && std::fabs(baseline_.head_offset_y) > 0.02) {
-    drop = cfg_.head_down_drop_ratio * std::fabs(static_cast<float>(baseline_.head_offset_y));
+  double ref = 0.0;
+  if (baseline_.valid) {
+    if (baseline_.ear_mid_valid) {
+      ref = std::fabs(baseline_.ear_mid_offset_y);
+    } else {
+      ref = std::fabs(baseline_.head_offset_y);
+    }
+  }
+  if (ref > 0.02) {
+    drop = cfg_.head_down_drop_ratio * static_cast<float>(ref);
     drop = std::max(cfg_.head_down_drop_min, std::min(cfg_.head_down_drop_max, drop));
   }
   head_down_rule_.SetTrigger(drop, drop * 0.5f);
@@ -215,6 +234,30 @@ void PostureAnalyzer::ResetSmoother() {
   wr_count_ = 0;
   wr_next_ = 0;
   wr_window_.fill(0.f);
+  ear_count_ = 0;
+  ear_next_ = 0;
+  ear_window_.fill(0.f);
+}
+
+float PostureAnalyzer::SmoothEarAngle(float raw, bool valid) {
+  if (!valid) {
+    return ear_count_ > 0 ? ear_window_[(ear_next_ + 7 - 1) % 7] : 0.f;
+  }
+  ear_window_[ear_next_] = raw;
+  ear_next_ = (ear_next_ + 1) % 7;
+  if (ear_count_ < 7) ++ear_count_;
+  float sorted[7];
+  const int n = std::min(ear_count_, 7);
+  for (int i = 0; i < n; ++i) {
+    const float v = ear_window_[static_cast<size_t>(i)];
+    int j2 = i - 1;
+    while (j2 >= 0 && sorted[j2] > v) {
+      sorted[j2 + 1] = sorted[j2];
+      --j2;
+    }
+    sorted[j2 + 1] = v;
+  }
+  return sorted[n / 2];
 }
 
 void PostureAnalyzer::ResetRules() {
@@ -310,6 +353,31 @@ PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int fra
   // 歪头代理量：肩中点 -> 鼻子的连线相对竖直方向的偏角
   m.head_axis_deg = std::atan2(nose.x - sx, sy - nose.y) * kRad2Deg;
 
+  // 备用头部参考点：耳朵中点 / 双眼中点。
+  // 为什么需要：俯拍机位下正脸几乎不可见，鼻子的检测极不稳定
+  //（实测 x 抖动 ±69px，ear 只有 ±5°），鼻子驱动的 head_offset_y 会抖 0.57，
+  // 直接把 head_down 判据淹掉。耳朵在头两侧、俯拍可见，是更可靠的头高基准。
+  {
+    const Keypoint& ear_l = person.joints[kEarL];
+    const Keypoint& ear_r = person.joints[kEarR];
+    if (ear_l.confidence >= min_conf && ear_r.confidence >= min_conf) {
+      const float ear_d = Dist(ear_l.x, ear_l.y, ear_r.x, ear_r.y);
+      if (ear_d > sw * 0.35f) {
+        m.ear_mid_offset_y = ((ear_l.y + ear_r.y) * 0.5f - sy) / sw;
+        m.ear_mid_valid = true;
+      }
+    }
+    const Keypoint& eye_l = person.joints[kEyeL];
+    const Keypoint& eye_r = person.joints[kEyeR];
+    if (eye_l.confidence >= min_conf && eye_r.confidence >= min_conf) {
+      const float eye_d = Dist(eye_l.x, eye_l.y, eye_r.x, eye_r.y);
+      if (eye_d > sw * 0.08f) {
+        m.eye_mid_offset_y = ((eye_l.y + eye_r.y) * 0.5f - sy) / sw;
+        m.eye_mid_valid = true;
+      }
+    }
+  }
+
   // 耳线角（歪头的可靠判据）。两只耳朵都可信时才算。
   const Keypoint& ear_l = person.joints[kEarL];
   const Keypoint& ear_r = person.joints[kEarR];
@@ -327,17 +395,37 @@ PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int fra
   // ★ 但只有「手腕抬到肩线之上」才算 —— 坐在桌前打字时，手在桌面上，
   //   图像里离胸/脸并不远（俯视机位尤其明显），不加上这个门控会一直误报托腮。
   //   实测：手放桌面时手腕比肩线低 95~109% 肩宽；托腮时一定高于肩线。
+  // 托腮的两个量：手腕到鼻子的距离（越小越像托腮）、手腕相对肩线的高度。
+  // 两者都从「最靠近鼻子的那只手腕」算，保证是同一只手。
   float best = std::numeric_limits<float>::max();
-  bool any_wrist = false;
-  const float wrist_above_limit = sy - sw * 0.10f;   // 留 10% 肩宽容差
+  float best_wrist_y = 0.f;
   for (const Keypoint* w : {&wr_l, &wr_r}) {
     if (w->confidence < min_conf) continue;
-    if (w->y > wrist_above_limit) continue;          // 手在下方 → 不是托腮
-    any_wrist = true;
+    m.wrist_valid = true;
     const float d = Dist(w->x, w->y, nose.x, nose.y) / sw;
-    if (d < best) best = d;
+    if (d < best) {
+      best = d;
+      best_wrist_y = w->y;
+    }
   }
-  m.wrist_to_nose = any_wrist ? best : 99.f;
+  m.wrist_to_nose_raw = m.wrist_valid ? best : 99.f;
+  if (m.wrist_valid) m.wrist_y_rel = (best_wrist_y - sy) / sw;
+
+  // 门控：手腕必须比「校准时的手腕高度」明显抬高。
+  // ★ 不能用「手腕高于肩线」：俯拍机位下下巴与手腕的投影都落在肩线以下，
+  //   实测托腮时 wrist_y_rel = 0.38（仍低于肩线），正常坐 1.19。
+  //   用相对基准的高度差才分得开。
+  bool gate_ok = false;
+  if (!baseline_.valid || !baseline_.wrist_valid) {
+    // 没有腕高基准时退回「高于肩线」这条保守规则
+    gate_ok = m.wrist_valid && m.wrist_y_rel < -0.10f;
+  } else {
+    gate_ok = m.wrist_valid &&
+              m.wrist_y_rel < static_cast<float>(baseline_.wrist_y_rel) -
+                                  cfg_.hand_face_wrist_rise;
+  }
+  m.wrist_above_shoulder = gate_ok;
+  m.wrist_to_nose = gate_ok ? m.wrist_to_nose_raw : 99.f;
 
   m.person_confidence = person.person_confidence;
 
@@ -402,6 +490,16 @@ bool PostureAnalyzer::Plausible(const PostureMetrics& m, const PersonPose& p,
   const float cy = p.box.CenterY() / frame_height;
   if (cx < cfg_.roi_x || cx > cfg_.roi_x + cfg_.roi_w) return false;
   if (cy < cfg_.roi_y || cy > cfg_.roi_y + cfg_.roi_h) return false;
+
+  // ★ 尺寸门：主用户的肩宽占比不能远小于校准时的自己。
+  // 现场实测：人离开后椅子/桌角被检出成「人」，框只有 95x118px（宽占比 0.12），
+  // 而正常坐时是 0.35 —— 尺寸差 3 倍。这条同时解决了「人走了还报在座」
+  // 和「小框被当成第二个人 → 误判多人」两个问题。
+  if (baseline_.valid && baseline_.width_ratio > 0.01) {
+    const float min_ratio =
+        static_cast<float>(baseline_.width_ratio) * cfg_.min_size_ratio;
+    if (m.width_ratio < min_ratio) return false;
+  }
 
   (void)sx;
   return true;
@@ -529,9 +627,11 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
     return obs;
   }
 
-  // too_close 用平滑后的 width_ratio，其余量保持原始（姿态变化需要即时响应）
+  // too_close 用平滑后的 width_ratio；头肩纵向/肩线角保持原始（姿态变化要即时响���）
   m.width_ratio_raw = m.width_ratio;
   m.width_ratio = SmoothWidthRatio(m.width_ratio_raw);
+  // 耳线角也平滑（单帧跳变 25° 会把歪头判据打断）
+  m.ear_angle_deg = SmoothEarAngle(m.ear_angle_deg, m.ear_angle_valid);
 
   last_metrics_ = m;
   last_valid_at_ = now;
@@ -565,8 +665,15 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
   if (baseline_.valid) {
     v_shoulder = LineAngleDelta(m.shoulder_angle_deg,
                                 static_cast<float>(baseline_.shoulder_angle_deg));
-    const float drop = m.head_offset_y - static_cast<float>(baseline_.head_offset_y);
-    v_head_down = std::max(0.f, drop);
+    // 低头：优先用耳中点（稳定），没有才退回鼻子。
+    // 必须两侧用同一个参考点算差值，否则基准和当前不可比。
+    if (m.ear_mid_valid && baseline_.ear_mid_valid) {
+      v_head_down = std::max(0.f, m.ear_mid_offset_y -
+                                      static_cast<float>(baseline_.ear_mid_offset_y));
+    } else {
+      v_head_down = std::max(0.f, m.head_offset_y -
+                                      static_cast<float>(baseline_.head_offset_y));
+    }
     // 歪头：优先用耳线（稳定）；耳朵不可信时退回旧的头轴角（俯视下会抖，但至少不瞎报）
     if (m.ear_angle_valid && baseline_.ear_angle_valid) {
       v_head_tilt = LineAngleDelta(m.ear_angle_deg,
@@ -591,6 +698,15 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
       obs.triggers.push_back(
           RuleTrigger{rule.cfg().key, rule.cfg().label_zh, r.active_s, rule.cfg().priority});
     }
+    RuleDiag dg;
+    dg.key = rule.cfg().key;
+    dg.has_value = r.valid;
+    dg.value = r.value;
+    dg.trigger = rule.cfg().trigger;
+    dg.latched = r.latched;
+    dg.held_s = r.held_s;
+    dg.hold_s = rule.cfg().hold_s;
+    obs.rule_diags.push_back(dg);
   };
   push(r_shoulder, shoulder_rule_);
   push(r_head_down, head_down_rule_);

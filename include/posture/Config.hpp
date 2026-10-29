@@ -69,9 +69,9 @@ struct Config {
   // （直视机位基准约 -0.9 肩宽，显示器上方俯拍只有 -0.20）。固定的 0.35
   // 在俯视机位下永远达不到（鼻子压到肩线上最多也就降 0.20），低头检测直接失效。
   // 用比例就与机位无关：鼻子朝肩线下降了「自己基准距离的 55%」即判明显低头。
-  float head_down_drop_ratio = 0.55f;
+  float head_down_drop_ratio = 0.25f;
   float head_down_drop_min = 0.10f;  // 比例算出的阈值下限（防噪声）
-  float head_down_drop_max = 0.45f;  // 上限（防直视机位下过于迟钝）
+  float head_down_drop_max = 0.35f;  // 上限（防直视机位下过于迟钝）
   float head_down_drop_legacy = 0.35f;   // 兼容旧配置键，仅在没有基准时参考
   float head_down_hold_s = 5.0f;
   float head_tilt_deg = 18.0f;       // 鼻-肩中点连线相对基准的偏角
@@ -83,7 +83,17 @@ struct Config {
   float too_close_ratio_rel = 1.35f;
   float too_close_ratio = 0.75f;     // 绝对值兜底（没有基准时用）
   float too_close_hold_s = 5.0f;
-  float hand_face_ratio = 0.95f;     // 手腕-鼻子距离 / 肩宽
+  // 托腮门控：手腕必须比「校准时的手腕高度」抬高多少肩宽。
+  // 不能用「手腕高于肩线」—— 俯拍机位下下巴/手腕投影都在肩线以下，
+  // 实测托腮时 wrist_y_rel=0.38（仍低于肩线 0.38），而正常坐 1.19。
+  float hand_face_wrist_rise = 0.35f;
+  float hand_face_ratio = 0.95f;
+
+  // 人体尺寸门：主用户的肩宽占比不得低于「校准基准 × 该比例」。
+  // 用来挡「人走了以后椅子/桌角被当成人体」—— 实测假阳性框只有 95x118px
+  // （宽占比 0.12），而正常坐着的用户是 0.35。同时也能挡掉这类小框
+  // 造成的「多人」误判。
+  float min_size_ratio = 0.55f;     // 手腕-鼻子距离 / 肩宽
   float hand_face_hold_s = 5.0f;
 
   // ---- eye care（§5.1 / §5.2）----

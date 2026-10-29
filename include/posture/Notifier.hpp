@@ -46,6 +46,20 @@ struct StatusSnapshot {
   double remaining_s = 0.0;
 
   std::vector<std::string> active_rules;
+  // 每条规则的「当前值 / 阈值 / 已持续」，现场调参时直接看这个
+  struct RuleView {
+    std::string key;
+    bool has_value = false;
+    double value = 0.0;
+    double trigger = 0.0;
+    bool latched = false;
+    double held_s = 0.0;
+    double hold_s = 0.0;
+  };
+  std::vector<RuleView> rules;
+  // 主用户人体框（像素），用于判断"人是不是太大/太小/出框"
+  double box_x = 0.0, box_y = 0.0, box_w = 0.0, box_h = 0.0;
+  bool box_valid = false;
   std::string last_notification_title;
   double last_notification_ago_s = -1.0;
 

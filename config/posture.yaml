@@ -59,9 +59,10 @@ posture:
   # 低头阈值：相对「基准头肩距离」的比例（不是固定绝对值）。
   # 直视机位基准约 -0.9 肩宽 → 阈值 0.45；显示器上方俯拍基准只有 -0.20 → 阈值 0.11。
   # 用固定 0.35 在俯视机位下永远达不到（俯视下最多只能降 0.20），低头会完全失效。
-  head_down_drop_ratio: 0.55
+  # 实测：明显低头时耳中点比基准降 26%，所以取 0.25（0.55 永远达不到）
+  head_down_drop_ratio: 0.25
   head_down_drop_min: 0.10
-  head_down_drop_max: 0.45            # 阈值上限（直视机位基准大时才用得到）
+  head_down_drop_max: 0.35            # 阈值上限（直视机位基准大时才用得到）
   head_down_hold_s: 5
   head_tilt_deg: 18                  # 左右耳连线相对基准的偏角（不是头轴，头轴俯视下不稳）
   head_tilt_hold_s: 5
@@ -74,7 +75,13 @@ posture:
   too_close_ratio_rel: 1.35
   too_close_ratio: 0.75              # 绝对值兜底（没有校准基准时才用）
   too_close_hold_s: 5
-  hand_face_ratio: 0.95              # 手腕-鼻子距离 / 肩宽，小于该值视为托腮
+  # 托腮：手腕要比「校准时的手腕高度」抬高多少肩宽才算抬起手来。
+  # 不能用「手腕高于肩线」—— 俯拍下下巴/手腕投影都在肩线以下。
+  hand_face_wrist_rise: 0.35
+  hand_face_ratio: 0.95              # 抬起来之后，手腕-鼻子距离 / 肩宽 < 该值 = 托腮
+  # 人体尺寸门：肩宽占比低于「校准基准 × 该值」就不认作主用户。
+  # 挡「人走后椅子被当成人」（实测假阳性宽占比 0.12 vs 正常 0.35）。
+  min_size_ratio: 0.55
   hand_face_hold_s: 5
 
 eye_care:

@@ -55,6 +55,10 @@ class UserCalibration {
     float width_ratio;
     float ear_angle_deg;
     bool ear_angle_valid;
+    float wrist_y_rel;
+    bool wrist_valid;
+    float ear_mid_offset_y;
+    bool ear_mid_valid;
   };
 
   Config cfg_;

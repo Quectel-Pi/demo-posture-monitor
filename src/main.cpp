@@ -706,6 +706,30 @@ int main(int argc, char** argv) {
       snapshot.use_s = eye.active_s;
       snapshot.remaining_s = eye.remaining_s;
       snapshot.active_rules = obs.active_keys;
+      snapshot.rules.clear();
+      for (const auto& dg : obs.rule_diags) {
+        StatusSnapshot::RuleView rv;
+        rv.key = dg.key;
+        rv.has_value = dg.has_value;
+        rv.value = dg.value;
+        rv.trigger = dg.trigger;
+        rv.latched = dg.latched;
+        rv.held_s = dg.held_s;
+        rv.hold_s = dg.hold_s;
+        snapshot.rules.push_back(rv);
+      }
+      {
+        const PrimarySelection ps = analyzer.SelectPrimary(persons, frame.width, frame.height);
+        if (ps.person) {
+          snapshot.box_valid = true;
+          snapshot.box_x = ps.person->box.x;
+          snapshot.box_y = ps.person->box.y;
+          snapshot.box_w = ps.person->box.w;
+          snapshot.box_h = ps.person->box.h;
+        } else {
+          snapshot.box_valid = false;
+        }
+      }
       snapshot.frame_width = frame.width;
       snapshot.frame_height = frame.height;
       snapshot.today_bad_s = stats.today().bad_s + bad_accum;

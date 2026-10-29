@@ -80,7 +80,11 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
       static_cast<float>(yaml.Num("posture.too_close_ratio", c.too_close_ratio));
   c.too_close_hold_s =
       static_cast<float>(yaml.Num("posture.too_close_hold_s", c.too_close_hold_s));
+  c.hand_face_wrist_rise = static_cast<float>(
+      yaml.Num("posture.hand_face_wrist_rise", c.hand_face_wrist_rise));
   c.hand_face_ratio = static_cast<float>(yaml.Num("posture.hand_face_ratio", c.hand_face_ratio));
+  c.min_size_ratio = static_cast<float>(
+      yaml.Num("posture.min_size_ratio", c.min_size_ratio));
   c.hand_face_hold_s =
       static_cast<float>(yaml.Num("posture.hand_face_hold_s", c.hand_face_hold_s));
 

@@ -215,18 +215,31 @@ void TestTopDownCamera() {
   Check(drop > 0.0f, "低头时头肩纵向相对基准确实减小（drop=" +
                      std::to_string(drop).substr(0, 5) + "）");
 
-  // 低头阈值随基准缩放：俯视基准 -0.20 → 阈值约 0.11（不是固定 0.35）
-  Check(std::fabs(analyzer.HeadDownThreshold() - 0.112f) < 0.02f,
-        "俯视机位低头阈值按基准缩放为 " +
-            std::to_string(analyzer.HeadDownThreshold()).substr(0, 5) + "（固定 0.35 则永远触发不了）");
+  // 低头阈值随基准缩放（俯视基准 -0.20 → 0.20*0.25=0.05 被下限 0.10 兜住）
+  Check(std::fabs(analyzer.HeadDownThreshold() - 0.10f) < 0.02f,
+        "俯视机位（基准 -0.20）低头阈值被下限兜到 " +
+            std::to_string(analyzer.HeadDownThreshold()).substr(0, 5));
 
-  // 直视机位基准 -0.9 → 阈值被上限 0.45 截住
+  // 实测：明显低头时耳中点从 -0.603 降到 -0.445（降 0.158 = 26%）
+  // ratio 0.25 → 阈值 0.151，正好能覆盖
+  Baseline mid_base;
+  mid_base.valid = true;
+  mid_base.ear_mid_valid = true;
+  mid_base.ear_mid_offset_y = -0.603;
+  PostureAnalyzer mid_analyzer(cfg, mid_base);
+  const float th = mid_analyzer.HeadDownThreshold();
+  Check(std::fabs(th - 0.151f) < 0.01f,
+        "实测机位（耳中基准 -0.603）阈值 = " + std::to_string(th).substr(0, 5) +
+            "，实降 0.158 可以覆盖");
+
+  // 直视机位基准 -0.9 → 0.9*0.25=0.225，被上限 0.35 兜住吗？不，仍在范围内
   Baseline far_base;
   far_base.valid = true;
-  far_base.head_offset_y = -0.9;
+  far_base.head_offset_y = -1.5;
   PostureAnalyzer far_analyzer(cfg, far_base);
-  Check(std::fabs(far_analyzer.HeadDownThreshold() - 0.45f) < 0.01f,
-        "直视机位低头阈值被上限截到 0.45");
+  Check(far_analyzer.HeadDownThreshold() <= 0.35f,
+        "基准很大时阈值被上限 0.35 兜住（" +
+            std::to_string(far_analyzer.HeadDownThreshold()).substr(0, 5) + "）");
 
   // 趴桌：鼻子压到肩线之下一点（head_gap 为负）仍然有效 —— 这是要检测的姿态
   PersonPose prone_p = p;
@@ -239,6 +252,99 @@ void TestTopDownCamera() {
   bad_p.joints[kNose] = Keypoint{330, 430, 0.9f};     // 远低于肩线
   const PostureMetrics bm = analyzer.ComputeMetrics(bad_p, 640, 480);
   Check(!bm.valid, "鼻子跑到胸口位置时判为关键点错检、丢弃");
+}
+
+void TestWristGateRelative() {
+  std::printf("-- 托腮门控：相对校准腕高（俯拍机位）\n");
+  Config cfg;
+  cfg.joint_confidence = 0.4f;
+  cfg.pose_confidence = 0.4f;
+  cfg.hand_face_wrist_rise = 0.35f;
+  cfg.hand_face_ratio = 0.95f;
+  cfg.min_size_ratio = 0.55f;
+  cfg.too_close_ratio_rel = 1.5f;   // 本测试不关心
+
+  Baseline b;
+  b.valid = true;
+  b.shoulder_angle_deg = 0.0;
+  b.head_offset_y = -0.30;
+  b.ear_angle_valid = true;
+  b.width_ratio = 0.42;
+  b.wrist_valid = true;
+  b.wrist_y_rel = 1.19;             // 校准时手在桌面：比肩线低 1.19 个肩宽
+  PostureAnalyzer analyzer(cfg, b);
+
+  // sw = 0.42*640 = 268.8 px；sy = 300
+  const float sw = 0.42f * 640.f;
+  auto make = [&](float wrist_y) {
+    PersonPose p{};
+    p.person_confidence = 0.9f;
+    p.box = BBox{60, 80, 480, 380};
+    p.joints[kShoulderL] = Keypoint{120, 300, 0.9f};
+    p.joints[kShoulderR] = Keypoint{120 + sw, 300, 0.9f};
+    p.joints[kNose] = Keypoint{120 + sw * 0.5f, 180, 0.9f};
+    p.joints[kEarL] = Keypoint{120 + sw * 0.25f, 165, 0.9f};
+    p.joints[kEarR] = Keypoint{120 + sw * 0.75f, 167, 0.9f};
+    p.joints[kWristL] = Keypoint{120 + sw * 0.5f, wrist_y, 0.9f};   // 这只手离鼻子最近
+    p.joints[kWristR] = Keypoint{60, wrist_y + 40, 0.9f};           // 另一只更远
+    return p;
+  };
+
+  // 手放桌面：腕高 ≈ 肩线 + 1.19*sw → 门控不过
+  const PostureMetrics desk = analyzer.ComputeMetrics(make(300 + 1.19f * sw), 640, 480);
+  Check(desk.wrist_valid, "手在桌面时手腕关键点有效");
+  Check(!desk.wrist_above_shoulder, "手在桌面 → 门控不过");
+  Check(desk.wrist_to_nose > 90.f, "手在桌面 → wrist_to_nose 置 99，不判托腮");
+  Check(desk.wrist_to_nose_raw < 90.f, "但原始值仍然记录（诊断用）");
+
+  // 托腮：腕抬到肩线下方 0.38*sw（俯拍下到不了肩线之上），鼻子也在附近
+  const float wrist_y = 300 + 0.38f * sw;
+  PersonPose face_p = make(wrist_y);
+  face_p.joints[kNose] = Keypoint{120 + sw * 0.46f, wrist_y - 30, 0.9f};  // 手在脸旁
+  const PostureMetrics face = analyzer.ComputeMetrics(face_p, 640, 480);
+  Check(face.wrist_above_shoulder,
+        "腕抬到肩线下 0.38 肩宽也门控通过（相对基准门控）");
+  Check(face.wrist_to_nose < 0.95f,
+        "托腮时候选手腕-鼻子距离 " + std::to_string(face.wrist_to_nose).substr(0, 4)
+            + " < 0.95");
+}
+
+void TestSizeGate() {
+  std::printf("-- 尺寸门：人走后椅子被当成人\n");
+  Config cfg;
+  cfg.joint_confidence = 0.4f;
+  cfg.pose_confidence = 0.4f;
+  cfg.min_size_ratio = 0.55f;
+  Baseline b;
+  b.valid = true;
+  b.head_offset_y = -0.30;
+  b.ear_angle_valid = true;
+  b.width_ratio = 0.35;             // 正常坐着时肩宽占画面 35%
+  PostureAnalyzer analyzer(cfg, b);
+
+  auto fake = [](float sw_norm, float box_w, float box_h) {
+    PersonPose p{};
+    p.person_confidence = 0.9f;
+    p.box = BBox{200, 90, box_w, box_h};   // 中心落在 ROI 内
+    p.joints[kShoulderL] = Keypoint{240, 300, 0.9f};
+    p.joints[kShoulderR] = Keypoint{240 + sw_norm * 640, 302, 0.9f};
+    p.joints[kNose] = Keypoint{240 + sw_norm * 320, 200, 0.9f};
+    p.joints[kEarL] = Keypoint{240 + sw_norm * 260, 190, 0.9f};
+    p.joints[kEarR] = Keypoint{240 + sw_norm * 380, 192, 0.9f};
+    p.joints[kWristL] = Keypoint{260, 430, 0.9f};
+    p.joints[kWristR] = Keypoint{420, 430, 0.9f};
+    return p;
+  };
+
+  // 假阳性：宽占比 0.12（远小于基准 0.35 的 55% = 0.1925）
+  std::vector<PersonPose> blob{fake(0.12f, 120, 160)};
+  const auto sel = analyzer.SelectPrimary(blob, 640, 480);
+  Check(sel.person == nullptr, "小框假阳性（宽占比 0.12）被尺寸门拒绝 → 判 USER_AWAY");
+
+  // 真用户：宽占比 0.35
+  std::vector<PersonPose> real{fake(0.35f, 380, 470)};
+  const auto sel2 = analyzer.SelectPrimary(real, 640, 480);
+  Check(sel2.person != nullptr, "正常尺寸的用户通过尺寸门");
 }
 
 void TestSmoothing() {
@@ -438,6 +544,8 @@ int main() {
   TestHoldRule();
   TestMetricsAndPlausibility();
   TestTopDownCamera();
+  TestWristGateRelative();
+  TestSizeGate();
   TestSmoothing();
   TestTooCloseRelative();
   TestBaselineDrift();

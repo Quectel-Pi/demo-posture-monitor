@@ -138,6 +138,12 @@ bool UserCalibration::LoadBaseline(const std::string& path, Baseline* out) {
   bool eav = false;
   if (ExtractBool(text, "ear_angle_valid", &eav)) b.ear_angle_valid = eav;
   if (ExtractNumber(text, "ear_angle_deg", &v)) b.ear_angle_deg = v;
+  bool wv = false;
+  if (ExtractBool(text, "wrist_valid", &wv)) b.wrist_valid = wv;
+  if (ExtractNumber(text, "wrist_y_rel", &v)) b.wrist_y_rel = v;
+  bool emv = false;
+  if (ExtractBool(text, "ear_mid_valid", &emv)) b.ear_mid_valid = emv;
+  if (ExtractNumber(text, "ear_mid_offset_y", &v)) b.ear_mid_offset_y = v;
   ExtractString(text, "camera_id", &b.camera_id);
   ExtractString(text, "model_sha256", &b.model_sha256);
   ExtractString(text, "created_at", &b.created_at);
@@ -160,6 +166,10 @@ bool UserCalibration::SaveBaseline(const std::string& path, const Baseline& base
     j.Bool("valid", true)
         .Bool("ear_angle_valid", baseline.ear_angle_valid)
         .Num("ear_angle_deg", baseline.ear_angle_deg, 3)
+        .Bool("wrist_valid", baseline.wrist_valid)
+        .Num("wrist_y_rel", baseline.wrist_y_rel, 3)
+        .Bool("ear_mid_valid", baseline.ear_mid_valid)
+        .Num("ear_mid_offset_y", baseline.ear_mid_offset_y, 3)
         .Num("shoulder_angle_deg", baseline.shoulder_angle_deg, 3)
         .Num("head_offset_x", baseline.head_offset_x, 4)
         .Num("head_offset_y", baseline.head_offset_y, 4)
@@ -222,7 +232,9 @@ UserCalibration::FeedResult UserCalibration::Feed(const PostureMetrics& metrics,
   }
   samples_.push_back({metrics.shoulder_angle_deg, metrics.head_offset_x,
                       metrics.head_offset_y, metrics.head_axis_deg, metrics.width_ratio,
-                      metrics.ear_angle_deg, metrics.ear_angle_valid});
+                      metrics.ear_angle_deg, metrics.ear_angle_valid,
+                      metrics.wrist_y_rel, metrics.wrist_valid,
+                      metrics.ear_mid_offset_y, metrics.ear_mid_valid});
 
   if (elapsed_s(now) < cfg_.calibration_duration_s) {
     if (message) {
@@ -301,6 +313,48 @@ UserCalibration::FeedResult UserCalibration::Feed(const PostureMetrics& metrics,
   b.camera_id = camera_id_;
   b.model_sha256 = model_sha256_;
   // 耳线基准：至少一半样本可信才用；否则标记无效，规则层会自动退回头轴角
+  // 校准时的腕高（中位数）。托腮门控的参考点。
+  {
+    std::vector<double> wr;
+    for (const auto& s : kept) {
+      if (s.wrist_valid) wr.push_back(s.wrist_y_rel);
+    }
+    if (!wr.empty()) {
+      b.wrist_valid = true;
+      b.wrist_y_rel = Median(wr);
+    }
+  }
+  // 耳中点基准（低头判据的首选参考）
+  {
+    std::vector<double> em;
+    for (const auto& s : kept) {
+      if (s.ear_mid_valid) em.push_back(s.ear_mid_offset_y);
+    }
+    if (em.size() * 2 >= kept.size()) {
+      b.ear_mid_valid = true;
+      b.ear_mid_offset_y = Median(em);
+    }
+  }
+
+  // ★ 合理性检查：头肩纵向距离不可能接近 0。
+  // 实测遇到过一次校准出 -0.086（鼻子几乎贴在肩线上），导致低头阈值退化到
+  // 下限 0.10 而鼻子最大只能再降 0.086 —— 低头永远触发不了。
+  // 优先用耳中点；两者都不合理就拒绝这次校准，让用户重来。
+  const double head_ref = b.ear_mid_valid ? b.ear_mid_offset_y : b.head_offset_y;
+  if (std::fabs(head_ref) < 0.15 || std::fabs(head_ref) > 1.6) {
+    if (message) {
+      char buf[220];
+      std::snprintf(buf, sizeof(buf),
+                    "头肩纵向距离异常（%.3f 肩宽，正常应在 0.15~1.6）。"
+                    "请坐直、让头和双肩完整入画后重新校准（镜头可能太低或太近）",
+                    head_ref);
+      *message = buf;
+    }
+    active_ = false;
+    samples_.clear();
+    return FeedResult::kFailed;
+  }
+
   b.ear_angle_valid = !ears.empty() && ears.size() * 2 >= samples_.size();
   b.ear_angle_deg = b.ear_angle_valid ? Median(ears) : 0.0;
   b.created_at = WallNowString();

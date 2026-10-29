@@ -35,6 +35,9 @@ class HoldRule {
     bool just_activated = false;
     bool just_cleared = false;
     double active_s = 0.0;      // 已激活多久
+    // ---- 现场诊断用（不影响判定逻辑）----
+    float value = 0.f;          // 本帧输入到规则的量
+    double held_s = 0.0;        // 越线已持续多久（未激活时=计时中；激活后=激活时长）
   };
 
   explicit HoldRule(HoldRuleCfg cfg) : cfg_(std::move(cfg)) {}
@@ -147,8 +150,14 @@ class PostureAnalyzer {
   std::array<float, 7> wr_window_{};
   int wr_count_ = 0;
   int wr_next_ = 0;
+  // 耳线角同样做中值平滑：实测单帧会从 -9.5° 跳到 +15.9°（耳点检歪），
+  // 不平滑则歪头判据只能靠运气连上 5 秒。
+  std::array<float, 7> ear_window_{};
+  int ear_count_ = 0;
+  int ear_next_ = 0;
 
   float SmoothWidthRatio(float raw);
+  float SmoothEarAngle(float raw, bool valid);
   void ResetSmoother();
 };
 

@@ -247,10 +247,22 @@ std::string Notifier::SerializeStatus(const StatusSnapshot& s) const {
       .Num("width_ratio", s.metrics.width_ratio, 3)
       .Num("width_ratio_raw", s.metrics.width_ratio_raw, 3)
       .Num("wrist_to_nose", s.metrics.wrist_to_nose, 2)
+      .Bool("wrist_above_shoulder", s.metrics.wrist_above_shoulder)
+      .Num("wrist_y_rel", s.metrics.wrist_y_rel, 3)
+      .Bool("wrist_valid", s.metrics.wrist_valid)
       .Str("session_state", s.session_state)
       .Num("use_s", s.use_s, 1)
       .Num("remaining_s", s.remaining_s, 0)
       .Strings("active_rules", s.active_rules)
+      .Bool("box_valid", s.box_valid)
+      .Num("box_x", s.box_x, 1)
+      .Num("box_y", s.box_y, 1)
+      .Num("box_w", s.box_w, 1)
+      .Num("box_h", s.box_h, 1)
+      .Num("ear_mid_offset_y", s.metrics.ear_mid_offset_y, 3)
+      .Bool("ear_mid_valid", s.metrics.ear_mid_valid)
+      .Num("eye_mid_offset_y", s.metrics.eye_mid_offset_y, 3)
+      .Bool("eye_mid_valid", s.metrics.eye_mid_valid)
       .Str("last_notification", s.last_notification_title)
       .Num("last_notification_ago_s", s.last_notification_ago_s, 0)
       .Num("today_bad_s", s.today_bad_s, 1)
@@ -265,6 +277,26 @@ std::string Notifier::SerializeStatus(const StatusSnapshot& s) const {
       .Bool("snoozed", s.snoozed)
       .Str("baseline_hint", s.baseline_hint)
       .Str("device_id", s.device_id);
+  // 规则诊断数组
+  {
+    std::string arr = "[";
+    for (size_t i = 0; i < s.rules.size(); ++i) {
+      const auto& r = s.rules[i];
+      if (i) arr += ",";
+      Json rj;
+      rj.Str("key", r.key)
+          .Bool("has_value", r.has_value)
+          .Num("value", r.value, 3)
+          .Num("trigger", r.trigger, 3)
+          .Bool("latched", r.latched)
+          .Num("held_s", r.held_s, 1)
+          .Num("hold_s", r.hold_s, 1);
+      arr += rj.Build();
+    }
+    arr += "]";
+    j.Raw("rules", arr);
+  }
+
   std::vector<double> roi{s.roi_x, s.roi_y, s.roi_w, s.roi_h};
   j.Array("roi", roi, 2);
   j.Bool("keypoints_valid", s.keypoints_valid);
