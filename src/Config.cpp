@@ -104,6 +104,8 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
   c.reminder_policy = yaml.Str("eye_care.reminder_policy", c.reminder_policy);
 
   c.cooldown_s = static_cast<float>(yaml.Num("notification.cooldown_s", c.cooldown_s));
+  c.posture_reminder_hold_s = yaml.Num(
+      "notification.posture_hold_s", c.posture_reminder_hold_s);
   c.headless_log = yaml.Bool("notification.headless_log", c.headless_log);
   c.desktop_popup = yaml.Bool("notification.desktop_popup", c.desktop_popup);
   c.voice = yaml.Bool("notification.voice", c.voice);

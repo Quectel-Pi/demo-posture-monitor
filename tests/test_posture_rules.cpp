@@ -454,6 +454,12 @@ void TestSmoothing() {
   Check(std::fabs(out.metrics.width_ratio - 0.42f) < 0.05f,
         "平滑后仍 ≈ 0.42（被中值滤掉），从而 too_close 不会被单帧带偏");
 
+  // 两个连续新样本即可改变 3 帧中值；无需积攒旧的 7 帧窗口。
+  analyzer.Update({make(0.56f)}, t + std::chrono::milliseconds(8100), 640, 480);
+  out = analyzer.Update({make(0.56f)}, t + std::chrono::milliseconds(8200), 640, 480);
+  Check(std::fabs(out.metrics.width_ratio - 0.56f) < 0.04f,
+        "3 帧中值在连续两帧新位置后跟上移动");
+
   // 连续偏移（真的挪近了）要能跟上
   for (int i = 0; i < 8; ++i) {
     out = analyzer.Update({make(0.56f)}, t + std::chrono::seconds(10 + i), 640, 480);
@@ -617,11 +623,94 @@ void TestAnalyzerObservation() {
   Check(!any_trigger, "没有校准基准时不触发高低肩/低头规则");
 }
 
+void TestInterruptedDetection() {
+  Config cfg;
+  cfg.shoulder_hold_s = 2.0;
+  cfg.missing_data_timeout_s = 1.5;
+  Baseline base;
+  base.valid = true;
+  base.width_ratio = 0.09375;
+  base.head_offset_y = -0.5;
+  PersonPose p{};
+  p.person_confidence = 0.9f;
+  p.box = {200, 100, 240, 360};
+  p.joints[kNose] = {320, 220, 0.9f};
+  p.joints[kShoulderL] = {260, 300, 0.9f};
+  p.joints[kShoulderR] = {380, 344, 0.9f};
+  PostureAnalyzer analyzer(cfg, base);
+  analyzer.Update({p}, At(0), 1280, 800);
+  analyzer.Update({p}, At(1), 1280, 800);
+  analyzer.Update({}, At(1.2), 1280, 800);
+  auto obs = analyzer.Update({p}, At(2.1), 1280, 800);
+  Check(obs.triggers.empty(), "丢点后不能沿用此前的持续异常计时");
+  analyzer.Update({p}, At(3.1), 1280, 800);
+  obs = analyzer.Update({p}, At(4.2), 1280, 800);
+  Check(obs.state == PostureState::kShoulderTilt, "恢复有效输入后 2 秒识别高低肩");
+
+  PostureProfile profile;
+  profile.SetClass("normal", {{0, 0, 0, 1, 0, 3}});
+  PostureProfile::Rule rule;
+  rule.label = "head_down";
+  rule.feature = 0;
+  rule.threshold = 0.15;
+  profile.SetRule(rule);
+  p.joints[kShoulderR].y = 300;
+  p.joints[kNose].y = 270;
+  analyzer.SetProfile(&profile, 2.0, 3.0);
+  analyzer.Update({p}, At(10), 1280, 800);
+  analyzer.Update({}, At(10.5), 1280, 800);
+  obs = analyzer.Update({p}, At(12.1), 1280, 800);
+  Check(obs.state == PostureState::kUnknown, "画像丢点后重新等待稳定识别");
+  obs = analyzer.Update({p}, At(14.2), 1280, 800);
+  Check(obs.state == PostureState::kHeadDown, "画像稳定 2 秒后识别低头");
+  PersonPose p2 = p;
+  p2.box.x += 320;
+  for (auto& joint : p2.joints) joint.x += 320;
+  obs = analyzer.Update({p, p2}, At(15), 1280, 800);
+  Check(obs.state == PostureState::kUnknown && obs.triggers.empty(),
+        "画像启用时多人保护依然有效");
+  analyzer.Update({}, At(20), 1280, 800);
+  obs = analyzer.Update({p}, At(21), 1280, 800);
+  Check(obs.state == PostureState::kUnknown, "离开后清除旧画像标签和滤波缓存");
+}
+
+void TestProfileAngleWrap() {
+  PostureMetrics metrics;
+  metrics.valid = true;
+  metrics.ear_angle_valid = true;
+  metrics.ear_angle_deg = -89;
+  metrics.shoulder_angle_deg = -89;
+  Baseline base;
+  base.valid = true;
+  base.ear_angle_valid = true;
+  base.ear_angle_deg = 89;
+  base.shoulder_angle_deg = 89;
+  PostureProfile::FeatureVec f{};
+  Check(BuildFeatureVector(metrics, base, &f, nullptr), "画像特征可计算");
+  Check(std::fabs(f[2] - 2.0) < 0.001, "肩线跨 180 度边界只偏移 2 度");
+}
+
+void TestFastStateConfirmation() {
+  HoldRule rule({"head_down", "低头", .15f, .08f, .5, .35, true, 50});
+  auto r = rule.Update(.3f, At(0));
+  Check(!r.latched, "单帧动作不改变界面状态");
+  r = rule.Update(.3f, At(.4));
+  Check(!r.latched, "0.4 秒尚未确认");
+  r = rule.Update(.3f, At(.5));
+  Check(r.just_activated, "0.5 秒即可更新姿势状态");
+  rule.Update(.01f, At(.6));
+  r = rule.Update(.01f, At(1.0));
+  Check(r.just_cleared, "恢复坐正后快速清除异常状态");
+}
+
 }  // namespace
 
 int main() {
   std::printf("=== posture rules 单测 ===\n");
   TestNormalizeLineAngle();
+  TestFastStateConfirmation();
+  TestInterruptedDetection();
+  TestProfileAngleWrap();
   TestHoldRule();
   TestMetricsAndPlausibility();
   TestTopDownCamera();

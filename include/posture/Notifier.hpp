@@ -43,6 +43,7 @@ struct StatusSnapshot {
 
   std::string session_state = "ABSENT";
   double use_s = 0.0;
+  double rest_remaining_s = 0.0;
   double remaining_s = 0.0;
 
   std::vector<std::string> active_rules;
@@ -66,6 +67,9 @@ struct StatusSnapshot {
   double raw_box_x = 0.0, raw_box_y = 0.0, raw_box_w = 0.0, raw_box_h = 0.0;
   std::string reject_reason;
   // 逐姿势画像分类结果
+  // 托腮原始距离（未经门控）。必须单独发：门控后的 wrist_to_nose 在门控
+  // 失败时是 99，拿它当训练特征会和运行期用的 raw 值差一个量级。
+  double wrist_to_nose_raw = 99.0;
   bool profile_active = false;
   std::string profile_label;
   double profile_distance = 0.0;   // 兼容：= 1/(strength+1)

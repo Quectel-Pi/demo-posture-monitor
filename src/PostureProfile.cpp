@@ -408,10 +408,10 @@ bool BuildFeatureVector(const PostureMetrics& m, const Baseline& b,
   // 从 0.2° 降到 0.1°，分离比从 2 提到 226。
   const double ear_tilt =
       (m.ear_angle_valid && b.ear_angle_valid)
-          ? std::fabs((m.ear_angle_deg - m.shoulder_angle_deg) -
-                      (b.ear_angle_deg - b.shoulder_angle_deg))
+          ? std::fabs(std::remainder((m.ear_angle_deg - m.shoulder_angle_deg) -
+                      (b.ear_angle_deg - b.shoulder_angle_deg), 180.0))
           : 0.0;
-  const double shoulder_tilt = std::fabs(m.shoulder_angle_deg - b.shoulder_angle_deg);
+  const double shoulder_tilt = std::fabs(std::remainder(m.shoulder_angle_deg - b.shoulder_angle_deg, 180.0));
   const double size = (b.width_ratio > 0.01) ? (m.width_ratio / b.width_ratio) : 1.0;
   double wrist_rise = 0.0;
   if (m.wrist_valid && b.wrist_valid) {

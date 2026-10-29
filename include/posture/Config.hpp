@@ -119,6 +119,7 @@ struct Config {
 
   // ---- notification（§13.1）----
   float cooldown_s = 60.0f;
+  double posture_reminder_hold_s = 2.0;  // independently debounce audible reminders
   bool headless_log = true;
   bool desktop_popup = false;
   bool voice = false;

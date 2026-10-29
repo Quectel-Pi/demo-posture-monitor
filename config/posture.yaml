@@ -14,7 +14,7 @@ camera:
   width: 640
   height: 480
   capture_fps: 20
-  infer_fps: 8
+  infer_fps: 15
   # auto = 用设备实际支持的最好格式（有 MJPG 就用 MJPG 省 USB 带宽，否则用设备给的第一个）
   # 也可以写死 "MJPG" / "YUYV" 强制某一种（不支持时会自动回退并打 WARN）
   preferred_pixel_format: "auto"
@@ -45,11 +45,13 @@ user:
   calibrate_on_start: false          # true = 每次启动都重新校准
 
 posture:
+  # 界面快速反馈，语音由 notification.posture_hold_s 单独防抖。
+  profile_hold_s: 0.5
   # ---- 高低肩（§4.2，V1 核心规则）----
   shoulder_trigger_deg: 12
   shoulder_recover_deg: 8
-  shoulder_hold_s: 8
-  recovery_hold_s: 3
+  shoulder_hold_s: 0.5
+  recovery_hold_s: 0.35
   missing_data_timeout_s: 1.5
 
   # ---- 以下三项是「单目近似量」，不是真实角度（§4.3/§4.4/§4.5）----
@@ -76,9 +78,9 @@ posture:
   baseline_drift_head_dy: 0.38
   head_down_drop_min: 0.10
   head_down_drop_max: 0.35            # 阈值上限（直视机位基准大时才用得到）
-  head_down_hold_s: 5
+  head_down_hold_s: 0.5
   head_tilt_deg: 18                  # 左右耳连线相对基准的偏角（不是头轴，头轴俯视下不稳）
-  head_tilt_hold_s: 5
+  head_tilt_hold_s: 0.5
   # 离屏过近：用「相对校准基准的倍数」，不要用绝对值。
   # 绝对值在不同摄像头 FOV 下完全不可比：
   #   icSpring 机位坐近 ≈ 0.78；UGREEN 俯视机位正常距离就已经 0.42
@@ -87,7 +89,7 @@ posture:
   # 1.35 = 比校准基准的肩宽占比大 35%
   too_close_ratio_rel: 1.35
   too_close_ratio: 0.75              # 绝对值兜底（没有校准基准时才用）
-  too_close_hold_s: 5
+  too_close_hold_s: 0.5
   # 托腮：手腕要比「校准时的手腕高度」抬高多少肩宽才算抬起手来。
   # 不能用「手腕高于肩线」—— 俯拍下下巴/手腕投影都在肩线以下。
   hand_face_wrist_rise: 0.35
@@ -95,7 +97,7 @@ posture:
   # 人体尺寸门：肩宽占比低于「校准基准 × 该值」就不认作主用户。
   # 挡「人走后椅子被当成人」（实测假阳性宽占比 0.12 vs 正常 0.35）。
   min_size_ratio: 0.55
-  hand_face_hold_s: 5
+  hand_face_hold_s: 0.5
 
 eye_care:
   continuous_use_s: 1200             # 20 分钟（20-20-20 规则）
@@ -112,10 +114,11 @@ ui:
   jpeg_quality: 70
 
 notification:
+  posture_hold_s: 2.0       # 姿势状态稳定后再播报；与界面识别速度分开
   cooldown_s: 60
   headless_log: true
   desktop_popup: false
-  voice: false
+  voice: true
 
 privacy:
   save_raw_video: false              # 硬性要求：true 会拒绝启动

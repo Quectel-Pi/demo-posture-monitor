@@ -508,6 +508,7 @@ int main(int argc, char** argv) {
         snapshot.session_state = ToString(eye.state);
         snapshot.use_s = eye.active_s;
         snapshot.remaining_s = eye.remaining_s;
+        snapshot.rest_remaining_s = eye.rest_remaining_s;
         continue;
       }
       const SteadyTime now = SteadyClock::now();
@@ -515,7 +516,14 @@ int main(int argc, char** argv) {
           std::chrono::duration<double>(now - last_infer).count() < min_interval) {
         continue;   // 抽帧：采集 20fps，推理只跑 infer_fps
       }
-      last_infer = now;
+      if (has_last_infer && min_interval > 0) {
+        last_infer += std::chrono::duration_cast<SteadyClock::duration>(
+            std::chrono::duration<double>(min_interval));
+        if (std::chrono::duration<double>(now - last_infer).count() > min_interval)
+          last_infer = now;
+      } else {
+        last_infer = now;
+      }
       has_last_infer = true;
 
       std::vector<PersonPose> persons;
@@ -551,8 +559,9 @@ int main(int argc, char** argv) {
       }
 
       // ---- 主用户是否在座（用于护眼计时）----
-      // UNKNOWN 且有人入镜时仍算在座：只是姿态判不出来，人确实在
-      const bool present = obs.state != PostureState::kUserAway;
+      // Count only a geometrically plausible primary user. Background detections
+      // rejected by framing/size gates must not keep an empty seat timer running.
+      const bool present = obs.metrics.valid;
       const auto eye = eye_care.Update(present, now);
 
       // ---- 统计：在座/不良时长 ----
@@ -574,14 +583,15 @@ int main(int argc, char** argv) {
 
       // ---- 坐姿提醒 ----
       Notification notify;
-      if (reminders.Consider(obs.triggers, now, &notify)) {
+      // Fast display classification and audible reminder timing are independent.
+      if (reminders.ConsiderPosture(obs, now, &notify)) {
         notifier.EmitEvent(notify.key, notify.title, notify.detail, notify.active_s);
         stats.AddAlert(notify.key, notify.active_s);
         last_notification_at = now_ms;
         snapshot.last_notification_title = notify.title;
       }
       // ---- 护眼休息提醒 ----
-      if (eye.rest_due_now) {
+      if (eye.state == SessionState::kBreakDue) {
         Notification rest;
         if (reminders.ConsiderRestReminder(now, &rest)) {
           notifier.EmitEvent(rest.key, rest.title, rest.detail, rest.active_s);
@@ -732,7 +742,9 @@ int main(int argc, char** argv) {
       snapshot.session_state = ToString(eye.state);
       snapshot.use_s = eye.active_s;
       snapshot.remaining_s = eye.remaining_s;
+      snapshot.rest_remaining_s = eye.rest_remaining_s;
       snapshot.profile_active = analyzer.profile_active();
+      snapshot.wrist_to_nose_raw = obs.metrics.wrist_to_nose_raw;
       snapshot.profile_label = obs.profile_label;
       snapshot.profile_distance = obs.profile_distance;
       snapshot.profile_strength = obs.profile_strength;

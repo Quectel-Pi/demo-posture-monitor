@@ -248,6 +248,8 @@ bool PostureAnalyzer::ProfileUpdate(const PostureMetrics& m, SteadyTime now,
   PostureProfile::FeatureVec f{};
   std::string why;
   if (!BuildFeatureVector(m, baseline_, &f, &why)) {
+    pending_label_.clear();
+    pending_since_ = now;
     obs->profile_used = true;
     obs->profile_label.clear();
     obs->explanation = "画像分类缺关键量：" + why;
@@ -287,7 +289,7 @@ bool PostureAnalyzer::ProfileUpdate(const PostureMetrics& m, SteadyTime now,
         obs->triggers.push_back(t);
       }
     }
-  } else {
+  } else if (v.label != pending_label_) {
     pending_label_ = v.label;
     pending_since_ = now;
   }
@@ -329,15 +331,15 @@ bool PostureAnalyzer::ProfileUpdate(const PostureMetrics& m, SteadyTime now,
 }
 
 float PostureAnalyzer::SmoothWidthRatio(float raw) {
-  if (raw <= 0.f) return wr_count_ > 0 ? wr_window_[(wr_next_ + 7 - 1) % 7] : 0.f;
+  if (raw <= 0.f) return wr_count_ > 0 ? wr_window_[(wr_next_ + kSmoothWindow - 1) % kSmoothWindow] : 0.f;
   wr_window_[wr_next_] = raw;
-  wr_next_ = (wr_next_ + 1) % 7;
-  if (wr_count_ < 7) ++wr_count_;
+  wr_next_ = (wr_next_ + 1) % kSmoothWindow;
+  if (wr_count_ < kSmoothWindow) ++wr_count_;
   // 取窗口内中位数：抗离群（单帧把肩膀检飞不会带偏结果）。
-  // 只有 7 个元素，用插入排序比 std::sort 更合适，也避开 GCC 14 对
+  // 窗口很小，用插入排序比 std::sort 更合适，也避开 GCC 14 对
   // std::sort(std::array) 的 -Warray-bounds 误报。
-  float sorted[7];
-  const int n = std::min(wr_count_, 7);
+  float sorted[kSmoothWindow];
+  const int n = std::min(wr_count_, kSmoothWindow);
   for (int i = 0; i < n; ++i) {
     const float v = wr_window_[static_cast<size_t>(i)];
     int j2 = i - 1;
@@ -361,13 +363,13 @@ void PostureAnalyzer::ResetSmoother() {
 
 float PostureAnalyzer::SmoothEarAngle(float raw, bool valid) {
   if (!valid) {
-    return ear_count_ > 0 ? ear_window_[(ear_next_ + 7 - 1) % 7] : 0.f;
+    return ear_count_ > 0 ? ear_window_[(ear_next_ + kSmoothWindow - 1) % kSmoothWindow] : 0.f;
   }
   ear_window_[ear_next_] = raw;
-  ear_next_ = (ear_next_ + 1) % 7;
-  if (ear_count_ < 7) ++ear_count_;
-  float sorted[7];
-  const int n = std::min(ear_count_, 7);
+  ear_next_ = (ear_next_ + 1) % kSmoothWindow;
+  if (ear_count_ < kSmoothWindow) ++ear_count_;
+  float sorted[kSmoothWindow];
+  const int n = std::min(ear_count_, kSmoothWindow);
   for (int i = 0; i < n; ++i) {
     const float v = ear_window_[static_cast<size_t>(i)];
     int j2 = i - 1;
@@ -381,8 +383,10 @@ float PostureAnalyzer::SmoothEarAngle(float raw, bool valid) {
 }
 
 void PostureAnalyzer::ResetRules() {
-  shoulder_rule_.Reset();
-  head_down_rule_.Reset();
+  pending_label_.clear();
+  active_label_.clear();
+  ResetSmoother();
+  shoulder_rule_.Reset();  head_down_rule_.Reset();
   head_tilt_rule_.Reset();
   too_close_rule_.Reset();
   hand_face_rule_.Reset();
@@ -785,6 +789,13 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
 
   const PrimarySelection sel = SelectPrimary(persons, frame_width, frame_height);
   if (!sel.person) {
+    shoulder_rule_.Update(std::nullopt, now);
+    head_down_rule_.Update(std::nullopt, now);
+    head_tilt_rule_.Update(std::nullopt, now);
+    too_close_rule_.Update(std::nullopt, now);
+    hand_face_rule_.Update(std::nullopt, now);
+    pending_label_.clear();
+    pending_since_ = now;
     last_metrics_ = PostureMetrics{};
     // 长时间没有有效数据 -> 复位规则，避免用旧异常状态无限延续（§11.3 末尾要求）
     if (last_valid_at_ && SecondsBetween(*last_valid_at_, now) > cfg_.missing_data_timeout_s) {
@@ -824,14 +835,9 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
   last_valid_at_ = now;
   obs.metrics = m;
 
-  // ---- 画像模式：用「最近原型 + 标签保持」判定，不再依赖手调阈值 ----
-  if (profile_active()) {
-    if (ProfileUpdate(m, now, &obs)) {
-      return obs;
-    }
-  }
-
   if (sel.ambiguous) {
+    pending_label_.clear();
+    pending_since_ = now;
     // 多人：不做个体判定，但规则计时也被挂起（不给 optional -> 不新增异常）
     auto r1 = shoulder_rule_.Update(std::nullopt, now);
     auto r2 = head_down_rule_.Update(std::nullopt, now);
@@ -846,6 +852,13 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
     obs.state = PostureState::kUnknown;
     obs.explanation = sel.reason;
     return obs;
+  }
+
+  // ---- 画像模式：用「最近原型 + 标签保持」判定，不再依赖手调阈值 ----
+  if (profile_active()) {
+    if (ProfileUpdate(m, now, &obs)) {
+      return obs;
+    }
   }
 
   // ---- 特征 -> 规则输入 ----

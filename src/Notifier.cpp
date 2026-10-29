@@ -217,6 +217,11 @@ void Notifier::Broadcast(const std::string& line) {
       DropClient(i);
       continue;
     }
+    // A partial JSON line cannot be dropped: reconnect rather than corrupt the stream.
+    if (static_cast<size_t>(n) != payload.size()) {
+      DropClient(i);
+      continue;
+    }
     ++i;
   }
 }
@@ -227,6 +232,9 @@ std::string Notifier::SerializeStatus(const StatusSnapshot& s) const {
       .Str("posture_state", s.posture_state)
       .Str("posture_state_zh", s.posture_state_zh)
       .Str("explanation", s.explanation)
+      .Bool("voice_enabled", cfg_.voice)
+      .Num("far_look_s", cfg_.far_look_s, 1)
+      .Num("rest_remaining_s", s.rest_remaining_s, 1)
       .Bool("present", s.present)
       .Int("persons", s.persons)
       .Int("persons_primary", s.persons_primary)
@@ -263,6 +271,7 @@ std::string Notifier::SerializeStatus(const StatusSnapshot& s) const {
       .Str("reject_reason", s.reject_reason)
       .Bool("profile_active", s.profile_active)
       .Str("profile_label", s.profile_label)
+      .Num("wrist_to_nose_raw", s.wrist_to_nose_raw, 3)
       .Num("profile_distance", s.profile_distance, 3)
       .Num("profile_strength", s.profile_strength, 2)
       .Str("profile_rule", s.profile_rule)
@@ -323,8 +332,8 @@ void Notifier::Publish(const StatusSnapshot& snapshot) {
   AcceptNew();
   const WallTime now = WallClock::now();
   if (has_published_ &&
-      std::chrono::duration<double>(now - last_publish_).count() < 0.5) {
-    return;   // 最多 2Hz，UI 侧够用
+      std::chrono::duration<double>(now - last_publish_).count() < 0.2) {
+    return;   // 5Hz status for responsive posture feedback
   }
   last_publish_ = now;
   has_published_ = true;

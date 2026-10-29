@@ -365,7 +365,9 @@ def read_frames(seconds: float) -> list[dict]:
             "shoulder_angle_deg": st.get("shoulder_angle_deg"),
             "width_ratio": st.get("width_ratio"),
             "wrist_y_rel": st.get("wrist_y_rel"),
-            "wrist_to_nose_raw": st.get("wrist_to_nose"),
+            # 必须用 raw：门控后的 wrist_to_nose 失败时是 99，
+            # 而 C++ 特征用的是 raw，混用会让训练和运行期差一个量级
+            "wrist_to_nose_raw": st.get("wrist_to_nose_raw"),
             "ear_mid_valid": bool(st.get("ear_mid_valid")),
             "ear_angle_valid": bool(st.get("ear_angle_valid")),
             "wrist_valid": bool(st.get("wrist_valid")),
@@ -402,12 +404,13 @@ def features_of(frame: dict, baseline: dict):
                - float(frame.get("shoulder_angle_deg", 0.0)))
         base_rel = (float(baseline.get("ear_angle_deg", 0.0))
                     - float(baseline.get("shoulder_angle_deg", 0.0)))
-        ear_tilt = abs(rel - base_rel)
+        ear_tilt = abs((rel - base_rel + 90.0) % 180.0 - 90.0)
     else:
         ear_tilt = 0.0
 
-    shoulder_tilt = abs(float(frame.get("shoulder_angle_deg", 0.0))
-                        - float(baseline.get("shoulder_angle_deg", 0.0)))
+    shoulder_delta = (float(frame.get("shoulder_angle_deg", 0.0))
+                      - float(baseline.get("shoulder_angle_deg", 0.0)))
+    shoulder_tilt = abs((shoulder_delta + 90.0) % 180.0 - 90.0)
 
     bwr = float(baseline.get("width_ratio") or 0.0)
     size = (float(frame.get("width_ratio") or 0.0) / bwr) if bwr > 0.01 else 1.0
