@@ -41,9 +41,6 @@ models:
 user:
   roi: [0.10, 0.05, 0.80, 0.90]      # 归一化 x,y,w,h：主用户必须在框内
   calibration_duration_s: 5
-  # 校准时你到屏幕的距离（厘米）。用于把肩宽占比换算成「估算距离」显示。
-  # 这不是 ToF，只是单目标定粗估，误差 ±20~30%，仅供趋势参考。
-  reference_distance_cm: 40
   baseline_file: "/var/lib/posture-guard/baseline.json"
   calibrate_on_start: false          # true = 每次启动都重新校准
 
@@ -64,14 +61,16 @@ posture:
   # 用固定 0.35 在俯视机位下永远达不到（俯视下最多只能降 0.20），低头会完全失效。
   head_down_drop_ratio: 0.55
   head_down_drop_min: 0.10
-  head_down_drop_max: 0.45               # 头肩纵向偏移相对基准的下降量（单位：肩宽）
+  head_down_drop_max: 0.45            # 阈值上限（直视机位基准大时才用得到）
   head_down_hold_s: 5
-  head_tilt_deg: 18                  # 肩中点-鼻子连线相对基准的偏角
+  head_tilt_deg: 18                  # 左右耳连线相对基准的偏角（不是头轴，头轴俯视下不稳）
   head_tilt_hold_s: 5
   # 离屏过近：用「相对校准基准的倍数」，不要用绝对值。
   # 绝对值在不同摄像头 FOV 下完全不可比：
   #   icSpring 机位坐近 ≈ 0.78；UGREEN 俯视机位正常距离就已经 0.42
   # 1.35 = 比校准时近了 1/1.35 ≈ 26%（40cm → 30cm）
+  # 离屏过近：判「比校准时的取景近了多少」，不是测距（本机无 ToF）。
+  # 1.35 = 比校准基准的肩宽占比大 35%
   too_close_ratio_rel: 1.35
   too_close_ratio: 0.75              # 绝对值兜底（没有校准基准时才用）
   too_close_hold_s: 5

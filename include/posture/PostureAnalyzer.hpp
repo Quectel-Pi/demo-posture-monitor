@@ -110,6 +110,15 @@ class PostureAnalyzer {
   // 返回空字符串 = 一致；非空 = 漂移原因（可直接给用户看）。
   std::string CheckBaselineDrift(const PostureMetrics& m) const;
 
+  // 摄像头绕光轴转动（roll）的提示 —— 只告警，不自动重新校准。
+  //
+  // 为什么和 CheckBaselineDrift 分开：CheckBaselineDrift 命中会作废基准并自动重校准，
+  // 但「肩线偏 29°」有两种可能：
+  //   a) 摄像头被转动/位置歪了  → 应该重校准
+  //   b) 用户本人正歪着坐        → 绝不能重校准，否则等于把坏姿势当成正常，之后永远不报警
+  // 系统分不清 a 和 b，所以只提示，由人来判断。
+  std::string CheckRollHint(const PostureMetrics& m) const;
+
   // 归一化直线角到 [-90, 90)，两条线的方向差再折叠一次（§4.2 强调的周期折叠）
   static float NormalizeLineAngle(float deg);
   static float LineAngleDelta(float current, float baseline);

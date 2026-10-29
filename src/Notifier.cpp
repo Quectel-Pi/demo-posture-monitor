@@ -246,8 +246,6 @@ std::string Notifier::SerializeStatus(const StatusSnapshot& s) const {
       .Bool("ear_angle_valid", s.metrics.ear_angle_valid)
       .Num("width_ratio", s.metrics.width_ratio, 3)
       .Num("width_ratio_raw", s.metrics.width_ratio_raw, 3)
-      .Num("distance_cm_est", s.metrics.distance_cm_est, 1)
-      .Bool("distance_cm_valid", s.metrics.distance_cm_valid)
       .Num("wrist_to_nose", s.metrics.wrist_to_nose, 2)
       .Str("session_state", s.session_state)
       .Num("use_s", s.use_s, 1)
@@ -265,6 +263,7 @@ std::string Notifier::SerializeStatus(const StatusSnapshot& s) const {
       .Str("model_sha256", s.model_sha256)
       .Bool("joint_conf_reliable", s.joint_confidence_reliable)
       .Bool("snoozed", s.snoozed)
+      .Str("baseline_hint", s.baseline_hint)
       .Str("device_id", s.device_id);
   std::vector<double> roi{s.roi_x, s.roi_y, s.roi_w, s.roi_h};
   j.Array("roi", roi, 2);

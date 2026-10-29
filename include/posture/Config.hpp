@@ -45,9 +45,6 @@ struct Config {
   // ---- user ----
   float roi_x = 0.10f, roi_y = 0.05f, roi_w = 0.80f, roi_h = 0.90f;
   float calibration_duration_s = 5.0f;
-  // 校准时人到屏幕的参考距离（厘米）。用于把 width_ratio 换算成「估算距离」，
-  // 让界面显示人话而不是比例。不是 ToF，只是单目标定的粗估（误差 ±20~30%）。
-  float reference_distance_cm = 40.0f;
   std::string baseline_file = "/var/lib/posture-guard/baseline.json";
 
   // ---- posture（核心规则，对应 §4.2 / §4.3 / §12.2）----

@@ -46,8 +46,6 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
   }
   c.calibration_duration_s =
       static_cast<float>(yaml.Num("user.calibration_duration_s", c.calibration_duration_s));
-  c.reference_distance_cm = static_cast<float>(
-      yaml.Num("user.reference_distance_cm", c.reference_distance_cm));
   c.baseline_file = yaml.Str("user.baseline_file", c.baseline_file);
   c.calibrate_on_start = yaml.Bool("user.calibrate_on_start", c.calibrate_on_start);
 

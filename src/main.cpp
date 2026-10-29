@@ -389,8 +389,7 @@ int main(int argc, char** argv) {
   }
   if (args.calibrate) {
     calibration.Start(SteadyClock::now(), camera.DeviceId(), cfg.camera_width,
-                      cfg.camera_height, engine->model_sha256(),
-                      cfg.reference_distance_cm);
+                      cfg.camera_height, engine->model_sha256());
     LOG_INFO("进入校准：请保持正常坐姿 ", static_cast<int>(cfg.calibration_duration_s),
              " 秒");
   }
@@ -472,7 +471,9 @@ int main(int argc, char** argv) {
     // 只做一次，避免用户中途换个坐姿就被反复判为漂移。
     std::vector<double> drift_wr;
     std::vector<double> drift_oy;
+    std::vector<double> drift_sh;
     bool drift_checked = false;
+    std::string checker_roll_hint;
     double last_video_ms = 0.0;
     std::uint64_t video_seq = 0;
     std::vector<unsigned char> video_jpeg;
@@ -579,6 +580,7 @@ int main(int argc, char** argv) {
           if (obs.metrics.valid && obs.state != PostureState::kUserAway) {
             drift_wr.push_back(obs.metrics.width_ratio);
             drift_oy.push_back(obs.metrics.head_offset_y);
+            drift_sh.push_back(obs.metrics.shoulder_angle_deg);
             if (drift_wr.size() >= 20) {
               drift_checked = true;
               std::vector<double> wr = drift_wr, oy = drift_oy;
@@ -594,10 +596,20 @@ int main(int argc, char** argv) {
                 std::remove(cfg.baseline_file.c_str());
                 analyzer.SetBaseline(Baseline{});
                 calibration.Start(now, camera.DeviceId(), frame.width, frame.height,
-                                  engine->model_sha256(), cfg.reference_distance_cm);
+                                  engine->model_sha256());
               } else {
                 LOG_INFO("校准基准与当前画面对得上（肩宽占比 ",
                          static_cast<double>(probe.width_ratio), "），继续使用");
+                // 距离对得上，但肩线角可能因摄像头 roll 而偏 —— 只提示，不动基准
+                std::vector<double> sh = drift_sh;
+                std::sort(sh.begin(), sh.end());
+                probe.shoulder_angle_deg =
+                    static_cast<float>(sh[sh.size() / 2]);
+                const std::string hint = analyzer.CheckRollHint(probe);
+                if (!hint.empty()) {
+                  LOG_WARN("基准提示：", hint);
+                  checker_roll_hint = hint;
+                }
               }
             }
           }
@@ -606,6 +618,7 @@ int main(int argc, char** argv) {
         // 没有基准：等校准完成后再武装检查
         drift_wr.clear();
         drift_oy.clear();
+        drift_sh.clear();
         drift_checked = false;
       }
 
@@ -615,7 +628,7 @@ int main(int argc, char** argv) {
         PostureMetrics probe;
         if (analyzer.CalibrateFeed(persons, frame.width, frame.height, &probe)) {
           calibration.Start(now, camera.DeviceId(), frame.width, frame.height,
-                            engine->model_sha256(), cfg.reference_distance_cm);
+                            engine->model_sha256());
           LOG_INFO("检测到在座用户且没有校准基准，自动开始 ",
                    static_cast<int>(cfg.calibration_duration_s), " 秒校准");
         }
@@ -716,6 +729,7 @@ int main(int argc, char** argv) {
       }
 
       snapshot.snoozed = reminders.snoozed(now);
+      snapshot.baseline_hint = checker_roll_hint;
       snapshot.last_notification_ago_s =
           last_notification_at > 0 ? (now_ms - last_notification_at) / 1000.0 : -1.0;
       notifier.Publish(snapshot);
@@ -730,7 +744,7 @@ int main(int argc, char** argv) {
           reminders.ClearSnooze();
         } else if (cmd.name == "calibrate") {
           calibration.Start(now, camera.DeviceId(), frame.width, frame.height,
-                            engine->model_sha256(), cfg.reference_distance_cm);
+                            engine->model_sha256());
           LOG_INFO("界面请求重新校准，请保持正常坐姿 ",
                    static_cast<int>(cfg.calibration_duration_s), " 秒");
         } else if (cmd.name == "quit") {

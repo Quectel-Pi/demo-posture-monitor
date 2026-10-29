@@ -62,6 +62,8 @@ struct StatusSnapshot {
   std::string runtime_version;
   bool joint_confidence_reliable = true;
   bool snoozed = false;
+  // 基准相关的提示（如「摄像头可能被转动，建议重新校准」）。空 = 无异常。
+  std::string baseline_hint;
   std::string device_id;
 
   // 归一化到 0..1 的 17 个关键点（x,y 交替）。只通过本地 socket 发给 UI 画骨架，

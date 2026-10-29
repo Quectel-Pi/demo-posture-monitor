@@ -131,7 +131,6 @@ bool UserCalibration::LoadBaseline(const std::string& path, Baseline* out) {
   if (ExtractNumber(text, "head_offset_y", &v)) b.head_offset_y = v;
   if (ExtractNumber(text, "head_axis_deg", &v)) b.head_axis_deg = v;
   if (ExtractNumber(text, "width_ratio", &v)) b.width_ratio = v;
-  if (ExtractNumber(text, "reference_distance_cm", &v)) b.reference_distance_cm = v;
   double n = 0;
   if (ExtractNumber(text, "samples", &n)) b.samples = static_cast<int>(n);
   if (ExtractNumber(text, "frame_width", &n)) b.frame_width = static_cast<int>(n);
@@ -166,7 +165,6 @@ bool UserCalibration::SaveBaseline(const std::string& path, const Baseline& base
         .Num("head_offset_y", baseline.head_offset_y, 4)
         .Num("head_axis_deg", baseline.head_axis_deg, 3)
         .Num("width_ratio", baseline.width_ratio, 4)
-        .Num("reference_distance_cm", baseline.reference_distance_cm, 1)
         .Int("samples", baseline.samples)
         .Int("frame_width", baseline.frame_width)
         .Int("frame_height", baseline.frame_height)
@@ -183,9 +181,7 @@ bool UserCalibration::SaveBaseline(const std::string& path, const Baseline& base
 }
 
 void UserCalibration::Start(SteadyTime now, const std::string& camera_id, int frame_width,
-                            int frame_height, const std::string& model_sha256,
-                            double reference_distance_cm) {
-  reference_distance_cm_ = reference_distance_cm;
+                            int frame_height, const std::string& model_sha256) {
   active_ = true;
   started_ = now;
   samples_.clear();
@@ -307,7 +303,6 @@ UserCalibration::FeedResult UserCalibration::Feed(const PostureMetrics& metrics,
   // 耳线基准：至少一半样本可信才用；否则标记无效，规则层会自动退回头轴角
   b.ear_angle_valid = !ears.empty() && ears.size() * 2 >= samples_.size();
   b.ear_angle_deg = b.ear_angle_valid ? Median(ears) : 0.0;
-  b.reference_distance_cm = reference_distance_cm_;
   b.created_at = WallNowString();
 
   active_ = false;

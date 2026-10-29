@@ -194,11 +194,21 @@ float PostureAnalyzer::SmoothWidthRatio(float raw) {
   wr_window_[wr_next_] = raw;
   wr_next_ = (wr_next_ + 1) % 7;
   if (wr_count_ < 7) ++wr_count_;
-  // 取窗口内中位数：抗离群（单帧把肩膀检飞不会带偏结果）
-  std::array<float, 7> sorted = wr_window_;
+  // 取窗口内中位数：抗离群（单帧把肩膀检飞不会带偏结果）。
+  // 只有 7 个元素，用插入排序比 std::sort 更合适，也避开 GCC 14 对
+  // std::sort(std::array) 的 -Warray-bounds 误报。
+  float sorted[7];
   const int n = std::min(wr_count_, 7);
-  std::sort(sorted.data(), sorted.data() + n);
-  return sorted[static_cast<size_t>(n / 2)];
+  for (int i = 0; i < n; ++i) {
+    const float v = wr_window_[static_cast<size_t>(i)];
+    int j2 = i - 1;
+    while (j2 >= 0 && sorted[j2] > v) {
+      sorted[j2 + 1] = sorted[j2];
+      --j2;
+    }
+    sorted[j2 + 1] = v;
+  }
+  return sorted[n / 2];
 }
 
 void PostureAnalyzer::ResetSmoother() {
@@ -240,6 +250,21 @@ std::string PostureAnalyzer::CheckBaselineDrift(const PostureMetrics& m) const {
     return buf;
   }
   return {};
+}
+
+std::string PostureAnalyzer::CheckRollHint(const PostureMetrics& m) const {
+  if (!baseline_.valid || !m.valid) return {};
+  const float dev = LineAngleDelta(m.shoulder_angle_deg,
+                                   static_cast<float>(baseline_.shoulder_angle_deg));
+  // 15° 起提示。低于这个量级既可能是轻微歪坐，也可能是检测抖动，不值得打扰。
+  if (dev < 15.f) return {};
+  char buf[220];
+  std::snprintf(buf, sizeof(buf),
+                "肩线与校准基准差 %.0f°（当前 %.1f°，基准 %.1f°）。"
+                "若是摄像头被转动/放歪了，请坐正后重新校准；"
+                "若你确实正歪着坐，忽略此提示",
+                dev, m.shoulder_angle_deg, baseline_.shoulder_angle_deg);
+  return buf;
 }
 
 PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int frame_width,
@@ -297,14 +322,6 @@ PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int fra
     }
   }
   m.width_ratio = frame_width > 0 ? sw / static_cast<float>(frame_width) : 0.f;
-
-  // 单目距离粗估：Z = K / width_ratio，K = 校准距离 × 校准时的 width_ratio
-  if (baseline_.valid && baseline_.width_ratio > 0.001 &&
-      baseline_.reference_distance_cm > 0.0 && m.width_ratio > 0.001f) {
-    const double K = baseline_.reference_distance_cm * baseline_.width_ratio;
-    m.distance_cm_est = static_cast<float>(K / m.width_ratio);
-    m.distance_cm_valid = true;
-  }
 
   // 托腮：两只手腕里离鼻子更近的那个。
   // ★ 但只有「手腕抬到肩线之上」才算 —— 坐在桌前打字时，手在桌面上，
@@ -512,16 +529,9 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
     return obs;
   }
 
-  // 距离相关用平滑后的 width_ratio，其余量保持原始（姿态变化需要即时响应）
+  // too_close 用平滑后的 width_ratio，其余量保持原始（姿态变化需要即时响应）
   m.width_ratio_raw = m.width_ratio;
   m.width_ratio = SmoothWidthRatio(m.width_ratio_raw);
-  // 重算估算距离（用平滑值）
-  if (baseline_.valid && baseline_.width_ratio > 0.001 &&
-      baseline_.reference_distance_cm > 0.0 && m.width_ratio > 0.001f) {
-    const double K = baseline_.reference_distance_cm * baseline_.width_ratio;
-    m.distance_cm_est = static_cast<float>(K / m.width_ratio);
-    m.distance_cm_valid = true;
-  }
 
   last_metrics_ = m;
   last_valid_at_ = now;

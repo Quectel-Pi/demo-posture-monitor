@@ -82,16 +82,12 @@ def render(d: dict) -> str:
     )
     out.append(f"指标      : {metrics}  (valid={d.get('metrics_valid')})")
 
-    if d.get("distance_cm_valid"):
-        out.append(f"估算距离  : {d.get('distance_cm_est', 0):.0f} cm"
-                   "   ※ 单目粗估，非 ToF，误差 ±20~30%")
-    else:
-        out.append("估算距离  : 不可用（没有校准基准）")
-
     out.append(f"校准      : baseline={d.get('has_baseline')} "
                f"calibrating={d.get('calibrating')} "
                f"{d.get('calibration_progress', 0):.0f}%  "
                f"({d.get('baseline_created_at') or '无'})")
+    if d.get("baseline_hint"):
+        out.append(f"⚠ 基准提示 : {d.get('baseline_hint')}")
     out.append(f"用眼      : {d.get('session_state')}  已用 {seconds(d.get('use_s'))}"
                f"  剩余 {seconds(d.get('remaining_s'))}")
     out.append(f"今日      : 在座 {int(d.get('today_use_s') or 0)}s"
