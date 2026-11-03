@@ -54,9 +54,6 @@ fi
 # ---------------------------------------------------------------------------
 if [[ -f "$PROJ/models/yolov8n-pose.rknn" ]]; then
   echo "[2/3] 模型已存在 models/yolov8n-pose.rknn"
-elif [[ -f "$PROJ/models/yolov8n-pose-rknn.rknn" ]]; then
-  cp "$PROJ/models/yolov8n-pose-rknn.rknn" "$PROJ/models/yolov8n-pose.rknn"
-  echo "[2/3] 已把 yolov8n-pose-rknn.rknn 复制为 yolov8n-pose.rknn"
 else
   echo "[2/3] !! models/ 下没有 .rknn 模型。" >&2
   echo "      按实施方案 §9 在 x86 主机上两步量化生成，或从交付包 models/ 拷贝。" >&2

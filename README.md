@@ -318,7 +318,6 @@ vendor/rknn/rknn_api.h      # 与板端 runtime 2.3.2 配套
 assets/voice/*.wav          # 6 条神经女声
 evidence/                   # 实测证据与复现命令
 tools/board-deps.tgz        # 板端离线编译依赖
-legacy/                     # 上一版 Python+GTK 单体实现（已停用）
 ```
 
 ---

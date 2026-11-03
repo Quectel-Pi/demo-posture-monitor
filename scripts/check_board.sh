@@ -82,7 +82,7 @@ else
   add FAIL "rknn_api.h" "缺少 vendor/rknn/rknn_api.h（跑 scripts/fetch_deps.sh）"
 fi
 model="/opt/posture-guard/models/yolov8n-pose.rknn"
-[[ -f "$model" ]] || model="$proj/models/yolov8n-pose-rknn.rknn"
+[[ -f "$model" ]] || model="$proj/models/yolov8n-pose.rknn"
 if [[ -f "$model" ]]; then
   add PASS "pose 模型" "$(basename "$model") $(du -h "$model" | cut -f1) sha256=$(sha256sum "$model" | cut -c1-16)"
 else

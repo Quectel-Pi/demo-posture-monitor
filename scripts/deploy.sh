@@ -60,7 +60,6 @@ BIN="$BUILD_DIR/posture_guard"
 echo "   $BIN $(du -h "$BIN" | cut -f1)"
 
 MODEL_SRC="models/yolov8n-pose.rknn"
-[[ -f "$MODEL_SRC" ]] || MODEL_SRC="models/yolov8n-pose-rknn.rknn"
 [[ -f "$MODEL_SRC" ]] || { echo "!! models/ 下没有 .rknn 模型" >&2; exit 1; }
 
 echo "== 2/7 服务账号 =="

@@ -58,7 +58,7 @@ def onnx_ref(sess, rgb, conf_th):
 
 def main(argv):
     files = argv[1:] or [os.path.join(APP, "samples", f) for f in ("zidane.jpg", "bus.jpg")]
-    eng = RknnBackend(os.path.join(APP, "models", "yolov8n-pose-rknn.rknn"))
+    eng = RknnBackend(os.path.join(APP, "models", "yolov8n-pose.rknn"))
     sess = ort.InferenceSession(os.path.join(APP, "models", "yolov8n-pose.onnx"),
                                 providers=["CPUExecutionProvider"])
     fails = 0

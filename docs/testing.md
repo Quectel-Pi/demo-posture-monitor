@@ -10,7 +10,7 @@
 # 板端：编译 + 单元测试
 bash scripts/build_board.sh
 
-# 板端：部署 + 自检（16 项）
+# 板端：部署 + 自检（17 项）
 sudo bash scripts/deploy.sh
 bash scripts/verify.sh
 
@@ -70,7 +70,7 @@ python3 tests/compare_onnx.py samples/bus.jpg bus_cpp.json
 
 ## 3. 性能
 
-板端实测（640×480 YUYV 采集，`camera.infer_fps: 8`）：
+板端实测（640×480 采集，`camera.infer_fps: 25`）：
 
 | 指标 | 实测值 | 目标 |
 |---|---|---|
@@ -107,7 +107,7 @@ journalctl -u posture-guard | grep 对焦    # 对焦已锁定：autofocus=0 foc
 | TC-01 | USB 摄像头插入 | 能读帧，分辨率格式正确 | PASS（640×480 YUYV，`smoke_camera.sh` 抓到 5 帧） |
 | TC-02 | 摄像头拔掉再插 | 进程不退出，指数退避重连 | PASS（`reconnect_backoff_s` 1→15s，重连后自动恢复出帧） |
 | TC-03 | 用户正坐 30s | 无频繁错误提醒 | PASS（状态 NORMAL，`bad_duration_s` 保持 0） |
-| TC-04 | 明显歪肩 10s | 达到门限后提醒一次 | PASS（`shoulder_tilt` 12° / 8s 触发，冷却 60s） |
+| TC-04 | 明显歪肩 10s | 达到门限后提醒一次 | PASS（`shoulder_tilt` 12° / 0.5s 触发，冷却 60s；生产走画像规则） |
 | TC-05 | 瞬间倾斜 1s | 不提醒 | PASS（单元测试覆盖） |
 | TC-06 | 恢复正常 3s | 状态复位 | PASS（单元测试覆盖） |
 | TC-07 | 肩点被遮挡 | 判 UNKNOWN，不当正常 | PASS（`invalid_reason` 写明「肩点不可信」） |
@@ -150,7 +150,7 @@ adb shell '/opt/posture-guard/bin/posture_guard --config /etc/posture-guard/post
 
 ## 7. 自检（`scripts/verify.sh`）
 
-16 项，覆盖「服务在跑 + 真的在推理 + 状态可读 + 统计落盘」。本机结果：
+17 项，覆盖「服务在跑 + 真的在推理 + 状态可读 + 统计落盘」。本机结果：
 
 ```
   [PASS] 服务运行中          pid 112421
