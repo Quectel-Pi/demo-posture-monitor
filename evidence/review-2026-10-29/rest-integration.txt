@@ -1,0 +1,2 @@
+PASS: NPU sample -> presence -> accelerated 3s eye timer -> rest event
+PASS: rest event -> local Mandarin WAV -> desktop paplay exit 0

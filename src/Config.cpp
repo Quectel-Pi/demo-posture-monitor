@@ -19,6 +19,7 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
   c.camera_height = yaml.Int("camera.height", c.camera_height);
   c.capture_fps = yaml.Int("camera.capture_fps", c.capture_fps);
   c.infer_fps = yaml.Int("camera.infer_fps", c.infer_fps);
+  c.npu_core_mask = yaml.Str("camera.npu_core_mask", c.npu_core_mask);
   c.preferred_pixel_format =
       yaml.Str("camera.preferred_pixel_format", c.preferred_pixel_format);
   c.camera_reconnect_backoff_s =
@@ -104,6 +105,11 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
   c.reminder_policy = yaml.Str("eye_care.reminder_policy", c.reminder_policy);
 
   c.cooldown_s = static_cast<float>(yaml.Num("notification.cooldown_s", c.cooldown_s));
+  c.posture_reminder_frames = yaml.Int("notification.posture_frames", c.posture_reminder_frames);
+  if (c.posture_reminder_frames < 0) {
+    if (err) *err = "notification.posture_frames must be >= 0";
+    return false;
+  }
   c.posture_reminder_hold_s = yaml.Num(
       "notification.posture_hold_s", c.posture_reminder_hold_s);
   c.headless_log = yaml.Bool("notification.headless_log", c.headless_log);
@@ -127,8 +133,26 @@ bool Config::Load(const std::string& path, Config* out, std::string* err) {
 
   c.profile_file = yaml.Str("posture.profile_file", c.profile_file);
   c.profile_hold_s = yaml.Num("posture.profile_hold_s", c.profile_hold_s);
+  c.profile_hold_hand_face_s =
+      yaml.Num("posture.profile_hold_hand_face_s", c.profile_hold_hand_face_s);
+  c.profile_hold_head_tilt_s =
+      yaml.Num("posture.profile_hold_head_tilt_s", c.profile_hold_head_tilt_s);
+  c.profile_hold_head_down_s =
+      yaml.Num("posture.profile_hold_head_down_s", c.profile_hold_head_down_s);
+  c.profile_hold_too_close_s =
+      yaml.Num("posture.profile_hold_too_close_s", c.profile_hold_too_close_s);
+  c.hand_face_wrist_face_max =
+      static_cast<float>(yaml.Num("posture.hand_face_wrist_face_max",
+                                  c.hand_face_wrist_face_max));
+  c.hand_face_below_ear_min =
+      static_cast<float>(yaml.Num("posture.hand_face_below_ear_min",
+                                  c.hand_face_below_ear_min));
+  c.hand_face_near_max = static_cast<float>(
+      yaml.Num("posture.hand_face_near_max", c.hand_face_near_max));
   c.profile_accept_radius =
       yaml.Num("posture.profile_accept_radius", c.profile_accept_radius);
+  c.profile_release_ratio =
+      yaml.Num("posture.profile_release_ratio", c.profile_release_ratio);
   c.baseline_drift_ratio =
       yaml.Num("posture.baseline_drift_ratio", c.baseline_drift_ratio);
   c.baseline_drift_head_dy =
@@ -175,7 +199,9 @@ std::string Config::Describe() const {
   os << "eye_care: use=" << continuous_use_s << "s far_look=" << far_look_s
      << "s presence=" << presence_confirm_s << "s absent=" << absent_confirm_s
      << "s policy=" << reminder_policy << "\n";
-  os << "notify: cooldown=" << cooldown_s << "s log=" << (headless_log ? "on" : "off")
+  os << "notify: posture_frames=" << posture_reminder_frames
+     << " legacy_hold=" << posture_reminder_hold_s << "s voice=" << (voice ? "on" : "off")
+     << " cooldown=" << cooldown_s << "s log=" << (headless_log ? "on" : "off")
      << " popup=" << (desktop_popup ? "on" : "off") << "\n";
   os << "ui_video: stream=" << (ui_stream_video ? "on" : "off") << " w=" << ui_video_width
      << " fps=" << ui_video_fps << " q=" << ui_jpeg_quality << "\n";

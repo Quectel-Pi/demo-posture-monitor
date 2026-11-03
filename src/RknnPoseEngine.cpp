@@ -202,6 +202,36 @@ bool RknnPoseEngine::Init(std::string* err) {
   }
   n_out_ = static_cast<int>(impl_->io_num.n_output);
 
+  // ---- NPU 核掩码 ----
+  // RK3576 实际只有 2 个 NPU 核（CORE_2 / CORE_0_1_2 会返回 -13）。
+  // 单核跑 yolov8n-pose 是 14.1ms，双核 10.6ms。默认用双核，可由
+  // camera.npu_core_mask 改回 "auto"/"0"/"1"（单核时给别的 NPU 任务留出余量）。
+  {
+    const std::string& m = cfg_.npu_core_mask;
+    rknn_core_mask mask = RKNN_NPU_CORE_AUTO;
+    bool known = true;
+    if (m == "auto" || m.empty()) {
+      mask = RKNN_NPU_CORE_AUTO;
+    } else if (m == "0") {
+      mask = RKNN_NPU_CORE_0;
+    } else if (m == "1") {
+      mask = RKNN_NPU_CORE_1;
+    } else if (m == "0_1" || m == "all") {
+      mask = RKNN_NPU_CORE_0_1;
+    } else {
+      known = false;
+      LOG_WARN("camera.npu_core_mask=\"", m, "\" 无法识别（支持 auto/0/1/0_1），回退 auto");
+    }
+    const int cm_ret = rknn_set_core_mask(impl_->ctx, mask);
+    if (cm_ret != RKNN_SUCC) {
+      // 不影响功能：runtime 会退回默认调度，只是拿不到加速
+      LOG_WARN("rknn_set_core_mask(", known ? m : "auto", ") 失败 ret=", cm_ret,
+               "，按 runtime 默认核调度继续");
+    } else {
+      LOG_INFO("NPU 核掩码 ", known ? m : "auto", " 已生效");
+    }
+  }
+
   impl_->in_attr = {};
   impl_->in_attr.index = 0;
   ret = rknn_query(impl_->ctx, RKNN_QUERY_INPUT_ATTR, &impl_->in_attr, sizeof(impl_->in_attr));
@@ -269,6 +299,32 @@ bool RknnPoseEngine::Init(std::string* err) {
   input_buf_.assign(static_cast<size_t>(in_w_) * in_h_ * 3, 114);
   candidates_.reserve(256);
 
+  // ---- 输出缓冲预分配 ----
+  // 量化模型：拉 int8 原件（out_q_buf_），解码时按需反量化到 out_f_buf_；
+  // 非量化：直接让 runtime 转 float。均预分配，避免每帧 millions 级的堆分配。
+  out_q_buf_.assign(static_cast<size_t>(n_out_), {});
+  out_f_buf_.assign(static_cast<size_t>(n_out_), {});
+  out_is_int8_ = true;
+  for (int i = 0; i < n_out_ && i < 4; ++i) {
+    const rknn_tensor_attr& a = impl_->out_attr[i];
+    out_elems_[i] = static_cast<int>(a.n_elems);
+    out_zp_[i] = a.zp;
+    out_scale_[i] = a.scale;
+    if (a.type != RKNN_TENSOR_INT8) out_is_int8_ = false;
+  }
+  if (out_is_int8_) {
+    for (int i = 0; i < n_out_; ++i) {
+      out_q_buf_[i].resize(static_cast<size_t>(impl_->out_attr[i].n_elems), 0);
+      out_f_buf_[i].resize(static_cast<size_t>(impl_->out_attr[i].n_elems), 0.f);
+    }
+    LOG_INFO("输出张量 int8 就地反量化（zp/scale 取自 OUTPUT_ATTR）");
+  } else {
+    for (int i = 0; i < n_out_; ++i) {
+      out_f_buf_[i].resize(static_cast<size_t>(impl_->out_attr[i].n_elems), 0.f);
+    }
+    LOG_INFO("输出张量非 int8，交回 runtime 转 float");
+  }
+
   LOG_INFO("RKNN 引擎就绪: ", cfg_.model_path, " 输入 ", in_w_, "x", in_h_,
            " 输出 ", n_out_, " 个 tensor, runtime ", sdk_version_);
   LOG_INFO("模型 SHA256 ", model_sha256_);
@@ -292,13 +348,22 @@ void RknnPoseEngine::Letterbox(const cv::Mat& bgr) {
   ratio_ = r;
 
   std::memset(input_buf_.data(), 114, input_buf_.size());  // 灰边 padding
-  cv::Mat resized;
-  cv::resize(bgr, resized, cv::Size(nw, nh), 0, 0, cv::INTER_LINEAR);
-  cv::Mat rgb;
-  cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
 
+  // 复用缓冲：只在输入尺寸变化时重新分配。
+  // 旧实现每帧都新建两个 cv::Mat，等于每帧两次堆分配 + 两次 free。
+  if (lb_src_w_ != w || lb_src_h_ != h) {
+    lb_resized_.create(nh, nw, CV_8UC3);
+    lb_rgb_.create(nh, nw, CV_8UC3);
+    lb_src_w_ = w;
+    lb_src_h_ = h;
+  }
+  cv::resize(bgr, lb_resized_, lb_resized_.size(), 0, 0, cv::INTER_LINEAR);
+  cv::cvtColor(lb_resized_, lb_rgb_, cv::COLOR_BGR2RGB);
+
+  // 目标区最大只到 (in_w_ - pad_x_)，所以一次 memcpy 搬 nw*3 字节是安全的：
+  // pad_x_ + nw <= in_w_ 恒成立（pad_x_ 就是按这个算出来的）。
   for (int y = 0; y < nh; ++y) {
-    const std::uint8_t* src = rgb.ptr<std::uint8_t>(y);
+    const std::uint8_t* src = lb_rgb_.ptr<std::uint8_t>(y);
     std::uint8_t* dst = input_buf_.data() +
                         (static_cast<size_t>(y + pad_y_) * in_w_ + pad_x_) * 3;
     std::memcpy(dst, src, static_cast<size_t>(nw) * 3);
@@ -332,8 +397,9 @@ void RknnPoseEngine::Decode(const float* const* outs, const int* out_sizes) {
       const int anchor = kAnchorOffset[si] + idx;
 
       Candidate c{};
-      c.cx = (gx + 0.5f - d[0] + d[2]) * st;
-      c.cy = (gy + 0.5f - d[1] + d[3]) * st;
+      // Center is the midpoint of the decoded left/right (top/bottom) edges.
+      c.cx = (gx + 0.5f + (d[2] - d[0]) * 0.5f) * st;
+      c.cy = (gy + 0.5f + (d[3] - d[1]) * 0.5f) * st;
       c.w = (d[0] + d[2]) * st;
       c.h = (d[1] + d[3]) * st;
       c.score = score;

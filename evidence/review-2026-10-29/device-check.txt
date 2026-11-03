@@ -1,0 +1,20 @@
+=== posture-guard 自检 ===
+  [PASS] 服务运行中          pid 334069
+  [PASS] 开机自启             enabled
+  [PASS] 服务账号             posture，组: posture dialout sudo audio video plugdev input render netdev bluetooth
+  [PASS] 配置可解析          camera=/dev/v4l/by-id/usb-UGREEN_Camera_1080P_UGREEN_Camera_1080P_SN0001-video-index0 640x480@20fps infer=15fps fmt=auto
+  [PASS] 模型就位             /opt/posture-guard/models/yolov8n-pose.rknn (7.1M, sha256 5c25db4f6ac4fb99)
+  [PASS] librknnrt                /lib/librknnrt.so
+  [PASS] 状态 socket            /run/posture-guard/status.sock
+  [PASS] 状态可读             USER_AWAY 无人
+  [PASS] 推理后端             rknn(NPU)
+  [PASS] 推理耗时             18.1 ms/帧（NPU，目标 <200ms）
+  [PASS] 推理帧率             8.8 fps（配置上限 camera.infer_fps）
+  [PASS] 出帧中                frame_id 115 -> 133
+  [PASS] 视频流                3 秒内收到 3 帧 640x480 JPEG（界面能看到画面）
+  [PASS] 统计落盘             stats-2026-10-29.jsonl (5901 行)
+  [PASS] 校准基线             肩线基准 5.9°, 样本 24 帧, 建立于 2026-10-29T14:35:29.287
+  [PASS] 近 10 分钟无 ERROR   0 条
+  [PASS] 桌面界面             /opt/posture-guard/ui/posture_guard_ui.py
+
+================ 结果：PASS=17  FAIL=0  WARN=0 ================

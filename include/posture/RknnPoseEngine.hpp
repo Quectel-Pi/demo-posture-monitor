@@ -35,6 +35,7 @@ class RknnPoseEngine final : public PoseEngine {
   double last_latency_ms() const override { return last_infer_ms_; }
 
  private:
+  friend struct RknnDecodeTestAccess;
   struct Candidate {
     float cx, cy, w, h;
     float score;
@@ -44,6 +45,7 @@ class RknnPoseEngine final : public PoseEngine {
   };
 
   // RKNN 张量解码：输出到 candidates_（640 输入空间）
+  // outs 里给的是「可直接读的 float 视图」：量化模型的 int8 张量在读取时就地反量化
   void Decode(const float* const* outs, const int* out_sizes);
   // letterbox：把 BGR 帧缩放填充到 640x640 的 RGB 缓冲
   void Letterbox(const cv::Mat& bgr);
@@ -68,9 +70,25 @@ class RknnPoseEngine final : public PoseEngine {
 
   // 预处理缓冲（预分配，避免每帧 malloc，§14.2 优化步骤 3）
   std::vector<std::uint8_t> input_buf_;
+  // letterbox 中间缓冲：只在本帧输入尺寸变化时重新分配，正常情况零分配
+  cv::Mat lb_resized_;
+  cv::Mat lb_rgb_;
+  int lb_src_w_ = 0;
+  int lb_src_h_ = 0;
   float ratio_ = 1.f;
   int pad_x_ = 0;
   int pad_y_ = 0;
+
+  // 输出缓冲。runtime 直接把 int8 张量拷进 out_q_buf_（pass_through），
+  // 解码时按 (q - zp) * scale 就地反量化到 out_f_buf_。
+  // 这样避免让 runtime 做全量反量化：它的 want_float=1 路径要把 2.5M 个
+  // 元素全部转成 float32（实测多花 1.8~2.7ms），而我们只用到其中一部分。
+  std::vector<std::vector<std::int8_t>> out_q_buf_;
+  std::vector<std::vector<float>> out_f_buf_;
+  int out_zp_[4] = {0, 0, 0, 0};
+  float out_scale_[4] = {0.f, 0.f, 0.f, 0.f};
+  int out_elems_[4] = {0, 0, 0, 0};
+  bool out_is_int8_ = false;
 
   std::vector<Candidate> candidates_;
   double last_infer_ms_ = 0.0;

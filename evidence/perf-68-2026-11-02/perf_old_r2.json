@@ -1,0 +1,4256 @@
+{
+ "label": "old-r2",
+ "socket": "/run/posture-guard/status.sock",
+ "seconds": 40.0,
+ "warmup": 6.0,
+ "drop_after": 0.0,
+ "status_msgs": 150,
+ "video_msgs": 301,
+ "status_hz": 4.41,
+ "video_hz": 8.85,
+ "fps_mean": 8.8,
+ "fps_min": 8.8,
+ "fps_max": 8.9,
+ "lat_mean_ms": 17.14,
+ "lat_p95_ms": 18.0,
+ "lat_min_ms": 16.7,
+ "lat_max_ms": 19.4,
+ "video_gap_mean_ms": 113.4,
+ "video_gap_p95_ms": 116.5,
+ "video_gap_max_ms": 119.9,
+ "video_kb_per_s": 482.0,
+ "raw": [
+  {
+   "t": 0.1311,
+   "type": "video",
+   "seq": 95,
+   "w": 640,
+   "h": 480,
+   "b64": 55792
+  },
+  {
+   "t": 0.1314,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 0.243,
+   "type": "video",
+   "seq": 96,
+   "w": 640,
+   "h": 480,
+   "b64": 55712
+  },
+  {
+   "t": 0.3549,
+   "type": "video",
+   "seq": 97,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 0.3552,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 0.471,
+   "type": "video",
+   "seq": 98,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 0.5802,
+   "type": "video",
+   "seq": 99,
+   "w": 640,
+   "h": 480,
+   "b64": 55688
+  },
+  {
+   "t": 0.5805,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.4,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 0.6907,
+   "type": "video",
+   "seq": 100,
+   "w": 640,
+   "h": 480,
+   "b64": 55796
+  },
+  {
+   "t": 0.8067,
+   "type": "video",
+   "seq": 101,
+   "w": 640,
+   "h": 480,
+   "b64": 55772
+  },
+  {
+   "t": 0.8069,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 0.9249,
+   "type": "video",
+   "seq": 102,
+   "w": 640,
+   "h": 480,
+   "b64": 55780
+  },
+  {
+   "t": 1.035,
+   "type": "video",
+   "seq": 103,
+   "w": 640,
+   "h": 480,
+   "b64": 55900
+  },
+  {
+   "t": 1.0353,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 1.1509,
+   "type": "video",
+   "seq": 104,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 1.2631,
+   "type": "video",
+   "seq": 105,
+   "w": 640,
+   "h": 480,
+   "b64": 55748
+  },
+  {
+   "t": 1.2633,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 1.3751,
+   "type": "video",
+   "seq": 106,
+   "w": 640,
+   "h": 480,
+   "b64": 55772
+  },
+  {
+   "t": 1.4911,
+   "type": "video",
+   "seq": 107,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 1.4913,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 1.603,
+   "type": "video",
+   "seq": 108,
+   "w": 640,
+   "h": 480,
+   "b64": 55800
+  },
+  {
+   "t": 1.7148,
+   "type": "video",
+   "seq": 109,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 1.7151,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 1.8309,
+   "type": "video",
+   "seq": 110,
+   "w": 640,
+   "h": 480,
+   "b64": 55728
+  },
+  {
+   "t": 1.9399,
+   "type": "video",
+   "seq": 111,
+   "w": 640,
+   "h": 480,
+   "b64": 55800
+  },
+  {
+   "t": 1.9402,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 2.0509,
+   "type": "video",
+   "seq": 112,
+   "w": 640,
+   "h": 480,
+   "b64": 55924
+  },
+  {
+   "t": 2.1669,
+   "type": "video",
+   "seq": 113,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 2.1672,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 2.2789,
+   "type": "video",
+   "seq": 114,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 2.3949,
+   "type": "video",
+   "seq": 115,
+   "w": 640,
+   "h": 480,
+   "b64": 55824
+  },
+  {
+   "t": 2.3952,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 2.5071,
+   "type": "video",
+   "seq": 116,
+   "w": 640,
+   "h": 480,
+   "b64": 55800
+  },
+  {
+   "t": 2.6191,
+   "type": "video",
+   "seq": 117,
+   "w": 640,
+   "h": 480,
+   "b64": 55700
+  },
+  {
+   "t": 2.6194,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 2.7349,
+   "type": "video",
+   "seq": 118,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 2.8476,
+   "type": "video",
+   "seq": 119,
+   "w": 640,
+   "h": 480,
+   "b64": 55796
+  },
+  {
+   "t": 2.8479,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.3,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 2.9589,
+   "type": "video",
+   "seq": 120,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 3.0749,
+   "type": "video",
+   "seq": 121,
+   "w": 640,
+   "h": 480,
+   "b64": 55844
+  },
+  {
+   "t": 3.0751,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 3.1873,
+   "type": "video",
+   "seq": 122,
+   "w": 640,
+   "h": 480,
+   "b64": 55792
+  },
+  {
+   "t": 3.2988,
+   "type": "video",
+   "seq": 123,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 3.2991,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 3.4149,
+   "type": "video",
+   "seq": 124,
+   "w": 640,
+   "h": 480,
+   "b64": 55788
+  },
+  {
+   "t": 3.5269,
+   "type": "video",
+   "seq": 125,
+   "w": 640,
+   "h": 480,
+   "b64": 55816
+  },
+  {
+   "t": 3.5272,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 3.6388,
+   "type": "video",
+   "seq": 126,
+   "w": 640,
+   "h": 480,
+   "b64": 55724
+  },
+  {
+   "t": 3.7553,
+   "type": "video",
+   "seq": 127,
+   "w": 640,
+   "h": 480,
+   "b64": 55700
+  },
+  {
+   "t": 3.7556,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 3.8669,
+   "type": "video",
+   "seq": 128,
+   "w": 640,
+   "h": 480,
+   "b64": 55772
+  },
+  {
+   "t": 3.9806,
+   "type": "video",
+   "seq": 129,
+   "w": 640,
+   "h": 480,
+   "b64": 55772
+  },
+  {
+   "t": 3.9809,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.6,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 4.0948,
+   "type": "video",
+   "seq": 130,
+   "w": 640,
+   "h": 480,
+   "b64": 55788
+  },
+  {
+   "t": 4.2069,
+   "type": "video",
+   "seq": 131,
+   "w": 640,
+   "h": 480,
+   "b64": 55748
+  },
+  {
+   "t": 4.2072,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 4.3188,
+   "type": "video",
+   "seq": 132,
+   "w": 640,
+   "h": 480,
+   "b64": 55812
+  },
+  {
+   "t": 4.4353,
+   "type": "video",
+   "seq": 133,
+   "w": 640,
+   "h": 480,
+   "b64": 55672
+  },
+  {
+   "t": 4.4355,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.2,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 4.5468,
+   "type": "video",
+   "seq": 134,
+   "w": 640,
+   "h": 480,
+   "b64": 55812
+  },
+  {
+   "t": 4.6629,
+   "type": "video",
+   "seq": 135,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 4.6632,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 4.7751,
+   "type": "video",
+   "seq": 136,
+   "w": 640,
+   "h": 480,
+   "b64": 55796
+  },
+  {
+   "t": 4.8869,
+   "type": "video",
+   "seq": 137,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 4.8871,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 5.0028,
+   "type": "video",
+   "seq": 138,
+   "w": 640,
+   "h": 480,
+   "b64": 55760
+  },
+  {
+   "t": 5.1149,
+   "type": "video",
+   "seq": 139,
+   "w": 640,
+   "h": 480,
+   "b64": 55780
+  },
+  {
+   "t": 5.1152,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 5.2268,
+   "type": "video",
+   "seq": 140,
+   "w": 640,
+   "h": 480,
+   "b64": 55628
+  },
+  {
+   "t": 5.3428,
+   "type": "video",
+   "seq": 141,
+   "w": 640,
+   "h": 480,
+   "b64": 55728
+  },
+  {
+   "t": 5.3431,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 5.4548,
+   "type": "video",
+   "seq": 142,
+   "w": 640,
+   "h": 480,
+   "b64": 55812
+  },
+  {
+   "t": 5.5668,
+   "type": "video",
+   "seq": 143,
+   "w": 640,
+   "h": 480,
+   "b64": 55756
+  },
+  {
+   "t": 5.5671,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 5.6827,
+   "type": "video",
+   "seq": 144,
+   "w": 640,
+   "h": 480,
+   "b64": 55828
+  },
+  {
+   "t": 5.7949,
+   "type": "video",
+   "seq": 145,
+   "w": 640,
+   "h": 480,
+   "b64": 55780
+  },
+  {
+   "t": 5.7952,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 5.9068,
+   "type": "video",
+   "seq": 146,
+   "w": 640,
+   "h": 480,
+   "b64": 55820
+  },
+  {
+   "t": 6.0234,
+   "type": "video",
+   "seq": 147,
+   "w": 640,
+   "h": 480,
+   "b64": 55700
+  },
+  {
+   "t": 6.0237,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.3,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 6.1348,
+   "type": "video",
+   "seq": 148,
+   "w": 640,
+   "h": 480,
+   "b64": 55816
+  },
+  {
+   "t": 6.2468,
+   "type": "video",
+   "seq": 149,
+   "w": 640,
+   "h": 480,
+   "b64": 55816
+  },
+  {
+   "t": 6.2471,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 6.3629,
+   "type": "video",
+   "seq": 150,
+   "w": 640,
+   "h": 480,
+   "b64": 55792
+  },
+  {
+   "t": 6.4748,
+   "type": "video",
+   "seq": 151,
+   "w": 640,
+   "h": 480,
+   "b64": 55824
+  },
+  {
+   "t": 6.4751,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 6.5868,
+   "type": "video",
+   "seq": 152,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 6.7033,
+   "type": "video",
+   "seq": 153,
+   "w": 640,
+   "h": 480,
+   "b64": 55640
+  },
+  {
+   "t": 6.7036,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 6.8147,
+   "type": "video",
+   "seq": 154,
+   "w": 640,
+   "h": 480,
+   "b64": 55624
+  },
+  {
+   "t": 6.9308,
+   "type": "video",
+   "seq": 155,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 6.9311,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 7.0449,
+   "type": "video",
+   "seq": 156,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 7.155,
+   "type": "video",
+   "seq": 157,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 7.1553,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 7.2708,
+   "type": "video",
+   "seq": 158,
+   "w": 640,
+   "h": 480,
+   "b64": 55592
+  },
+  {
+   "t": 7.383,
+   "type": "video",
+   "seq": 159,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 7.3833,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 7.4986,
+   "type": "video",
+   "seq": 160,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 7.6153,
+   "type": "video",
+   "seq": 161,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 7.6157,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 7.7273,
+   "type": "video",
+   "seq": 162,
+   "w": 640,
+   "h": 480,
+   "b64": 55848
+  },
+  {
+   "t": 7.8393,
+   "type": "video",
+   "seq": 163,
+   "w": 640,
+   "h": 480,
+   "b64": 55688
+  },
+  {
+   "t": 7.8397,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 7.9557,
+   "type": "video",
+   "seq": 164,
+   "w": 640,
+   "h": 480,
+   "b64": 55688
+  },
+  {
+   "t": 8.0674,
+   "type": "video",
+   "seq": 165,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 8.0679,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 8.1792,
+   "type": "video",
+   "seq": 166,
+   "w": 640,
+   "h": 480,
+   "b64": 55620
+  },
+  {
+   "t": 8.2923,
+   "type": "video",
+   "seq": 167,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 8.2926,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.6,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 8.4027,
+   "type": "video",
+   "seq": 168,
+   "w": 640,
+   "h": 480,
+   "b64": 55664
+  },
+  {
+   "t": 8.5147,
+   "type": "video",
+   "seq": 169,
+   "w": 640,
+   "h": 480,
+   "b64": 55644
+  },
+  {
+   "t": 8.5149,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 8.6309,
+   "type": "video",
+   "seq": 170,
+   "w": 640,
+   "h": 480,
+   "b64": 55708
+  },
+  {
+   "t": 8.7428,
+   "type": "video",
+   "seq": 171,
+   "w": 640,
+   "h": 480,
+   "b64": 55732
+  },
+  {
+   "t": 8.7431,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 8.8549,
+   "type": "video",
+   "seq": 172,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 8.971,
+   "type": "video",
+   "seq": 173,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 8.9713,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 9.0829,
+   "type": "video",
+   "seq": 174,
+   "w": 640,
+   "h": 480,
+   "b64": 55796
+  },
+  {
+   "t": 9.1988,
+   "type": "video",
+   "seq": 175,
+   "w": 640,
+   "h": 480,
+   "b64": 55724
+  },
+  {
+   "t": 9.1991,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 9.3108,
+   "type": "video",
+   "seq": 176,
+   "w": 640,
+   "h": 480,
+   "b64": 55688
+  },
+  {
+   "t": 9.4227,
+   "type": "video",
+   "seq": 177,
+   "w": 640,
+   "h": 480,
+   "b64": 55712
+  },
+  {
+   "t": 9.423,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 9.5387,
+   "type": "video",
+   "seq": 178,
+   "w": 640,
+   "h": 480,
+   "b64": 55648
+  },
+  {
+   "t": 9.6509,
+   "type": "video",
+   "seq": 179,
+   "w": 640,
+   "h": 480,
+   "b64": 55792
+  },
+  {
+   "t": 9.6512,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 9.7627,
+   "type": "video",
+   "seq": 180,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 9.8803,
+   "type": "video",
+   "seq": 181,
+   "w": 640,
+   "h": 480,
+   "b64": 55704
+  },
+  {
+   "t": 9.8805,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 9.9909,
+   "type": "video",
+   "seq": 182,
+   "w": 640,
+   "h": 480,
+   "b64": 55612
+  },
+  {
+   "t": 10.1047,
+   "type": "video",
+   "seq": 183,
+   "w": 640,
+   "h": 480,
+   "b64": 55820
+  },
+  {
+   "t": 10.105,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.6,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 10.2195,
+   "type": "video",
+   "seq": 184,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 10.3308,
+   "type": "video",
+   "seq": 185,
+   "w": 640,
+   "h": 480,
+   "b64": 55632
+  },
+  {
+   "t": 10.3311,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 10.4428,
+   "type": "video",
+   "seq": 186,
+   "w": 640,
+   "h": 480,
+   "b64": 55764
+  },
+  {
+   "t": 10.5588,
+   "type": "video",
+   "seq": 187,
+   "w": 640,
+   "h": 480,
+   "b64": 55676
+  },
+  {
+   "t": 10.5591,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 10.6708,
+   "type": "video",
+   "seq": 188,
+   "w": 640,
+   "h": 480,
+   "b64": 55692
+  },
+  {
+   "t": 10.7828,
+   "type": "video",
+   "seq": 189,
+   "w": 640,
+   "h": 480,
+   "b64": 55632
+  },
+  {
+   "t": 10.7831,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 10.8994,
+   "type": "video",
+   "seq": 190,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 11.0112,
+   "type": "video",
+   "seq": 191,
+   "w": 640,
+   "h": 480,
+   "b64": 55688
+  },
+  {
+   "t": 11.0115,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 11.1271,
+   "type": "video",
+   "seq": 192,
+   "w": 640,
+   "h": 480,
+   "b64": 55712
+  },
+  {
+   "t": 11.2392,
+   "type": "video",
+   "seq": 193,
+   "w": 640,
+   "h": 480,
+   "b64": 55800
+  },
+  {
+   "t": 11.2395,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 11.3511,
+   "type": "video",
+   "seq": 194,
+   "w": 640,
+   "h": 480,
+   "b64": 55672
+  },
+  {
+   "t": 11.4671,
+   "type": "video",
+   "seq": 195,
+   "w": 640,
+   "h": 480,
+   "b64": 55780
+  },
+  {
+   "t": 11.4674,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 11.5788,
+   "type": "video",
+   "seq": 196,
+   "w": 640,
+   "h": 480,
+   "b64": 55692
+  },
+  {
+   "t": 11.691,
+   "type": "video",
+   "seq": 197,
+   "w": 640,
+   "h": 480,
+   "b64": 55724
+  },
+  {
+   "t": 11.6913,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 11.8108,
+   "type": "video",
+   "seq": 198,
+   "w": 640,
+   "h": 480,
+   "b64": 55780
+  },
+  {
+   "t": 11.9235,
+   "type": "video",
+   "seq": 199,
+   "w": 640,
+   "h": 480,
+   "b64": 55700
+  },
+  {
+   "t": 11.9239,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 12.0353,
+   "type": "video",
+   "seq": 200,
+   "w": 640,
+   "h": 480,
+   "b64": 55672
+  },
+  {
+   "t": 12.1481,
+   "type": "video",
+   "seq": 201,
+   "w": 640,
+   "h": 480,
+   "b64": 55732
+  },
+  {
+   "t": 12.1483,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.1,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 12.2587,
+   "type": "video",
+   "seq": 202,
+   "w": 640,
+   "h": 480,
+   "b64": 55700
+  },
+  {
+   "t": 12.3708,
+   "type": "video",
+   "seq": 203,
+   "w": 640,
+   "h": 480,
+   "b64": 55792
+  },
+  {
+   "t": 12.3711,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 12.4872,
+   "type": "video",
+   "seq": 204,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 12.5991,
+   "type": "video",
+   "seq": 205,
+   "w": 640,
+   "h": 480,
+   "b64": 55704
+  },
+  {
+   "t": 12.5994,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 12.7112,
+   "type": "video",
+   "seq": 206,
+   "w": 640,
+   "h": 480,
+   "b64": 55740
+  },
+  {
+   "t": 12.8306,
+   "type": "video",
+   "seq": 207,
+   "w": 640,
+   "h": 480,
+   "b64": 55708
+  },
+  {
+   "t": 12.8311,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 12.9433,
+   "type": "video",
+   "seq": 208,
+   "w": 640,
+   "h": 480,
+   "b64": 55808
+  },
+  {
+   "t": 13.0553,
+   "type": "video",
+   "seq": 209,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 13.0557,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 13.1736,
+   "type": "video",
+   "seq": 210,
+   "w": 640,
+   "h": 480,
+   "b64": 55740
+  },
+  {
+   "t": 13.2833,
+   "type": "video",
+   "seq": 211,
+   "w": 640,
+   "h": 480,
+   "b64": 55604
+  },
+  {
+   "t": 13.2837,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 13.3993,
+   "type": "video",
+   "seq": 212,
+   "w": 640,
+   "h": 480,
+   "b64": 55676
+  },
+  {
+   "t": 13.5115,
+   "type": "video",
+   "seq": 213,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 13.5119,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.1,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 13.6234,
+   "type": "video",
+   "seq": 214,
+   "w": 640,
+   "h": 480,
+   "b64": 55680
+  },
+  {
+   "t": 13.7398,
+   "type": "video",
+   "seq": 215,
+   "w": 640,
+   "h": 480,
+   "b64": 55760
+  },
+  {
+   "t": 13.7403,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.2,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 13.8514,
+   "type": "video",
+   "seq": 216,
+   "w": 640,
+   "h": 480,
+   "b64": 55788
+  },
+  {
+   "t": 13.9633,
+   "type": "video",
+   "seq": 217,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 13.9637,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 14.0763,
+   "type": "video",
+   "seq": 218,
+   "w": 640,
+   "h": 480,
+   "b64": 55808
+  },
+  {
+   "t": 14.1872,
+   "type": "video",
+   "seq": 219,
+   "w": 640,
+   "h": 480,
+   "b64": 55728
+  },
+  {
+   "t": 14.1889,
+   "type": "status",
+   "fps": 8.9,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 14.2991,
+   "type": "video",
+   "seq": 220,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 14.4152,
+   "type": "video",
+   "seq": 221,
+   "w": 640,
+   "h": 480,
+   "b64": 55712
+  },
+  {
+   "t": 14.4156,
+   "type": "status",
+   "fps": 8.9,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 14.5272,
+   "type": "video",
+   "seq": 222,
+   "w": 640,
+   "h": 480,
+   "b64": 55788
+  },
+  {
+   "t": 14.6392,
+   "type": "video",
+   "seq": 223,
+   "w": 640,
+   "h": 480,
+   "b64": 55764
+  },
+  {
+   "t": 14.6396,
+   "type": "status",
+   "fps": 8.9,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 14.7552,
+   "type": "video",
+   "seq": 224,
+   "w": 640,
+   "h": 480,
+   "b64": 55676
+  },
+  {
+   "t": 14.8669,
+   "type": "video",
+   "seq": 225,
+   "w": 640,
+   "h": 480,
+   "b64": 55708
+  },
+  {
+   "t": 14.8671,
+   "type": "status",
+   "fps": 8.9,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 14.9787,
+   "type": "video",
+   "seq": 226,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 15.0949,
+   "type": "video",
+   "seq": 227,
+   "w": 640,
+   "h": 480,
+   "b64": 55800
+  },
+  {
+   "t": 15.0952,
+   "type": "status",
+   "fps": 8.9,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 15.2068,
+   "type": "video",
+   "seq": 228,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 15.3193,
+   "type": "video",
+   "seq": 229,
+   "w": 640,
+   "h": 480,
+   "b64": 55812
+  },
+  {
+   "t": 15.3196,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 15.4352,
+   "type": "video",
+   "seq": 230,
+   "w": 640,
+   "h": 480,
+   "b64": 55844
+  },
+  {
+   "t": 15.5471,
+   "type": "video",
+   "seq": 231,
+   "w": 640,
+   "h": 480,
+   "b64": 55772
+  },
+  {
+   "t": 15.5476,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 15.6633,
+   "type": "video",
+   "seq": 232,
+   "w": 640,
+   "h": 480,
+   "b64": 55708
+  },
+  {
+   "t": 15.7752,
+   "type": "video",
+   "seq": 233,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 15.7755,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 15.8872,
+   "type": "video",
+   "seq": 234,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 16.0033,
+   "type": "video",
+   "seq": 235,
+   "w": 640,
+   "h": 480,
+   "b64": 55868
+  },
+  {
+   "t": 16.0037,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 16.1151,
+   "type": "video",
+   "seq": 236,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 16.2273,
+   "type": "video",
+   "seq": 237,
+   "w": 640,
+   "h": 480,
+   "b64": 55828
+  },
+  {
+   "t": 16.2276,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 16.3432,
+   "type": "video",
+   "seq": 238,
+   "w": 640,
+   "h": 480,
+   "b64": 55748
+  },
+  {
+   "t": 16.4551,
+   "type": "video",
+   "seq": 239,
+   "w": 640,
+   "h": 480,
+   "b64": 55832
+  },
+  {
+   "t": 16.4555,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 16.5672,
+   "type": "video",
+   "seq": 240,
+   "w": 640,
+   "h": 480,
+   "b64": 55856
+  },
+  {
+   "t": 16.6832,
+   "type": "video",
+   "seq": 241,
+   "w": 640,
+   "h": 480,
+   "b64": 55792
+  },
+  {
+   "t": 16.6835,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 16.7951,
+   "type": "video",
+   "seq": 242,
+   "w": 640,
+   "h": 480,
+   "b64": 55772
+  },
+  {
+   "t": 16.907,
+   "type": "video",
+   "seq": 243,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 16.9072,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 17.0227,
+   "type": "video",
+   "seq": 244,
+   "w": 640,
+   "h": 480,
+   "b64": 55824
+  },
+  {
+   "t": 17.1347,
+   "type": "video",
+   "seq": 245,
+   "w": 640,
+   "h": 480,
+   "b64": 55856
+  },
+  {
+   "t": 17.135,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 17.2472,
+   "type": "video",
+   "seq": 246,
+   "w": 640,
+   "h": 480,
+   "b64": 55916
+  },
+  {
+   "t": 17.3627,
+   "type": "video",
+   "seq": 247,
+   "w": 640,
+   "h": 480,
+   "b64": 55796
+  },
+  {
+   "t": 17.363,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 17.4747,
+   "type": "video",
+   "seq": 248,
+   "w": 640,
+   "h": 480,
+   "b64": 55712
+  },
+  {
+   "t": 17.5875,
+   "type": "video",
+   "seq": 249,
+   "w": 640,
+   "h": 480,
+   "b64": 55816
+  },
+  {
+   "t": 17.5878,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 17.7031,
+   "type": "video",
+   "seq": 250,
+   "w": 640,
+   "h": 480,
+   "b64": 55856
+  },
+  {
+   "t": 17.8152,
+   "type": "video",
+   "seq": 251,
+   "w": 640,
+   "h": 480,
+   "b64": 55852
+  },
+  {
+   "t": 17.8154,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 17.9312,
+   "type": "video",
+   "seq": 252,
+   "w": 640,
+   "h": 480,
+   "b64": 55856
+  },
+  {
+   "t": 18.043,
+   "type": "video",
+   "seq": 253,
+   "w": 640,
+   "h": 480,
+   "b64": 55796
+  },
+  {
+   "t": 18.0433,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 18.1586,
+   "type": "video",
+   "seq": 254,
+   "w": 640,
+   "h": 480,
+   "b64": 55780
+  },
+  {
+   "t": 18.2753,
+   "type": "video",
+   "seq": 255,
+   "w": 640,
+   "h": 480,
+   "b64": 55768
+  },
+  {
+   "t": 18.2757,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 18.3872,
+   "type": "video",
+   "seq": 256,
+   "w": 640,
+   "h": 480,
+   "b64": 55796
+  },
+  {
+   "t": 18.4992,
+   "type": "video",
+   "seq": 257,
+   "w": 640,
+   "h": 480,
+   "b64": 55712
+  },
+  {
+   "t": 18.4996,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 18.6153,
+   "type": "video",
+   "seq": 258,
+   "w": 640,
+   "h": 480,
+   "b64": 55740
+  },
+  {
+   "t": 18.7272,
+   "type": "video",
+   "seq": 259,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 18.7276,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 18.8365,
+   "type": "video",
+   "seq": 260,
+   "w": 640,
+   "h": 480,
+   "b64": 55796
+  },
+  {
+   "t": 18.9511,
+   "type": "video",
+   "seq": 261,
+   "w": 640,
+   "h": 480,
+   "b64": 55768
+  },
+  {
+   "t": 18.9514,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 19.0628,
+   "type": "video",
+   "seq": 262,
+   "w": 640,
+   "h": 480,
+   "b64": 55688
+  },
+  {
+   "t": 19.1755,
+   "type": "video",
+   "seq": 263,
+   "w": 640,
+   "h": 480,
+   "b64": 55680
+  },
+  {
+   "t": 19.1758,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.1,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 19.2928,
+   "type": "video",
+   "seq": 264,
+   "w": 640,
+   "h": 480,
+   "b64": 55728
+  },
+  {
+   "t": 19.4029,
+   "type": "video",
+   "seq": 265,
+   "w": 640,
+   "h": 480,
+   "b64": 55768
+  },
+  {
+   "t": 19.4032,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 19.5153,
+   "type": "video",
+   "seq": 266,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 19.6314,
+   "type": "video",
+   "seq": 267,
+   "w": 640,
+   "h": 480,
+   "b64": 55748
+  },
+  {
+   "t": 19.6316,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 19.7432,
+   "type": "video",
+   "seq": 268,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 19.8587,
+   "type": "video",
+   "seq": 269,
+   "w": 640,
+   "h": 480,
+   "b64": 55852
+  },
+  {
+   "t": 19.8592,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 19.9753,
+   "type": "video",
+   "seq": 270,
+   "w": 640,
+   "h": 480,
+   "b64": 55768
+  },
+  {
+   "t": 20.087,
+   "type": "video",
+   "seq": 271,
+   "w": 640,
+   "h": 480,
+   "b64": 55884
+  },
+  {
+   "t": 20.0872,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 20.2029,
+   "type": "video",
+   "seq": 272,
+   "w": 640,
+   "h": 480,
+   "b64": 55856
+  },
+  {
+   "t": 20.3148,
+   "type": "video",
+   "seq": 273,
+   "w": 640,
+   "h": 480,
+   "b64": 55772
+  },
+  {
+   "t": 20.3151,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 20.4269,
+   "type": "video",
+   "seq": 274,
+   "w": 640,
+   "h": 480,
+   "b64": 55848
+  },
+  {
+   "t": 20.5428,
+   "type": "video",
+   "seq": 275,
+   "w": 640,
+   "h": 480,
+   "b64": 55824
+  },
+  {
+   "t": 20.543,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 20.6548,
+   "type": "video",
+   "seq": 276,
+   "w": 640,
+   "h": 480,
+   "b64": 55820
+  },
+  {
+   "t": 20.7674,
+   "type": "video",
+   "seq": 277,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 20.7676,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.4,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 20.8829,
+   "type": "video",
+   "seq": 278,
+   "w": 640,
+   "h": 480,
+   "b64": 55644
+  },
+  {
+   "t": 20.9948,
+   "type": "video",
+   "seq": 279,
+   "w": 640,
+   "h": 480,
+   "b64": 55832
+  },
+  {
+   "t": 20.995,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 21.1042,
+   "type": "video",
+   "seq": 280,
+   "w": 640,
+   "h": 480,
+   "b64": 55772
+  },
+  {
+   "t": 21.2227,
+   "type": "video",
+   "seq": 281,
+   "w": 640,
+   "h": 480,
+   "b64": 55832
+  },
+  {
+   "t": 21.2232,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 21.3353,
+   "type": "video",
+   "seq": 282,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 21.4438,
+   "type": "video",
+   "seq": 283,
+   "w": 640,
+   "h": 480,
+   "b64": 55728
+  },
+  {
+   "t": 21.444,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 21.5588,
+   "type": "video",
+   "seq": 284,
+   "w": 640,
+   "h": 480,
+   "b64": 55692
+  },
+  {
+   "t": 21.6707,
+   "type": "video",
+   "seq": 285,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 21.671,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 21.7828,
+   "type": "video",
+   "seq": 286,
+   "w": 640,
+   "h": 480,
+   "b64": 55820
+  },
+  {
+   "t": 21.8987,
+   "type": "video",
+   "seq": 287,
+   "w": 640,
+   "h": 480,
+   "b64": 55732
+  },
+  {
+   "t": 21.899,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 22.0107,
+   "type": "video",
+   "seq": 288,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 22.1228,
+   "type": "video",
+   "seq": 289,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 22.1231,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 22.2387,
+   "type": "video",
+   "seq": 290,
+   "w": 640,
+   "h": 480,
+   "b64": 55832
+  },
+  {
+   "t": 22.3528,
+   "type": "video",
+   "seq": 291,
+   "w": 640,
+   "h": 480,
+   "b64": 55828
+  },
+  {
+   "t": 22.353,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 22.4668,
+   "type": "video",
+   "seq": 292,
+   "w": 640,
+   "h": 480,
+   "b64": 55832
+  },
+  {
+   "t": 22.5787,
+   "type": "video",
+   "seq": 293,
+   "w": 640,
+   "h": 480,
+   "b64": 55852
+  },
+  {
+   "t": 22.579,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 22.6914,
+   "type": "video",
+   "seq": 294,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 22.8067,
+   "type": "video",
+   "seq": 295,
+   "w": 640,
+   "h": 480,
+   "b64": 55768
+  },
+  {
+   "t": 22.807,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 22.9187,
+   "type": "video",
+   "seq": 296,
+   "w": 640,
+   "h": 480,
+   "b64": 55828
+  },
+  {
+   "t": 23.0313,
+   "type": "video",
+   "seq": 297,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 23.0316,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.1,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 23.1469,
+   "type": "video",
+   "seq": 298,
+   "w": 640,
+   "h": 480,
+   "b64": 55880
+  },
+  {
+   "t": 23.2588,
+   "type": "video",
+   "seq": 299,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 23.2591,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 23.3709,
+   "type": "video",
+   "seq": 300,
+   "w": 640,
+   "h": 480,
+   "b64": 55820
+  },
+  {
+   "t": 23.4867,
+   "type": "video",
+   "seq": 301,
+   "w": 640,
+   "h": 480,
+   "b64": 55716
+  },
+  {
+   "t": 23.487,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 23.5987,
+   "type": "video",
+   "seq": 302,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 23.7108,
+   "type": "video",
+   "seq": 303,
+   "w": 640,
+   "h": 480,
+   "b64": 55748
+  },
+  {
+   "t": 23.7111,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 23.8266,
+   "type": "video",
+   "seq": 304,
+   "w": 640,
+   "h": 480,
+   "b64": 55836
+  },
+  {
+   "t": 23.9389,
+   "type": "video",
+   "seq": 305,
+   "w": 640,
+   "h": 480,
+   "b64": 55740
+  },
+  {
+   "t": 23.9392,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 24.0509,
+   "type": "video",
+   "seq": 306,
+   "w": 640,
+   "h": 480,
+   "b64": 55728
+  },
+  {
+   "t": 24.1669,
+   "type": "video",
+   "seq": 307,
+   "w": 640,
+   "h": 480,
+   "b64": 55764
+  },
+  {
+   "t": 24.1672,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 24.2788,
+   "type": "video",
+   "seq": 308,
+   "w": 640,
+   "h": 480,
+   "b64": 55724
+  },
+  {
+   "t": 24.3949,
+   "type": "video",
+   "seq": 309,
+   "w": 640,
+   "h": 480,
+   "b64": 55740
+  },
+  {
+   "t": 24.3952,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 24.5069,
+   "type": "video",
+   "seq": 310,
+   "w": 640,
+   "h": 480,
+   "b64": 55688
+  },
+  {
+   "t": 24.6195,
+   "type": "video",
+   "seq": 311,
+   "w": 640,
+   "h": 480,
+   "b64": 55644
+  },
+  {
+   "t": 24.6196,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 24.7348,
+   "type": "video",
+   "seq": 312,
+   "w": 640,
+   "h": 480,
+   "b64": 55692
+  },
+  {
+   "t": 24.8468,
+   "type": "video",
+   "seq": 313,
+   "w": 640,
+   "h": 480,
+   "b64": 55760
+  },
+  {
+   "t": 24.8472,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 24.9592,
+   "type": "video",
+   "seq": 314,
+   "w": 640,
+   "h": 480,
+   "b64": 55808
+  },
+  {
+   "t": 25.0748,
+   "type": "video",
+   "seq": 315,
+   "w": 640,
+   "h": 480,
+   "b64": 55788
+  },
+  {
+   "t": 25.075,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 25.1868,
+   "type": "video",
+   "seq": 316,
+   "w": 640,
+   "h": 480,
+   "b64": 55664
+  },
+  {
+   "t": 25.2989,
+   "type": "video",
+   "seq": 317,
+   "w": 640,
+   "h": 480,
+   "b64": 55648
+  },
+  {
+   "t": 25.2992,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 25.4168,
+   "type": "video",
+   "seq": 318,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 25.5268,
+   "type": "video",
+   "seq": 319,
+   "w": 640,
+   "h": 480,
+   "b64": 55728
+  },
+  {
+   "t": 25.5271,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 25.6388,
+   "type": "video",
+   "seq": 320,
+   "w": 640,
+   "h": 480,
+   "b64": 55760
+  },
+  {
+   "t": 25.7547,
+   "type": "video",
+   "seq": 321,
+   "w": 640,
+   "h": 480,
+   "b64": 55808
+  },
+  {
+   "t": 25.755,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 25.8668,
+   "type": "video",
+   "seq": 322,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 25.9789,
+   "type": "video",
+   "seq": 323,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 25.9792,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 26.0948,
+   "type": "video",
+   "seq": 324,
+   "w": 640,
+   "h": 480,
+   "b64": 55812
+  },
+  {
+   "t": 26.2068,
+   "type": "video",
+   "seq": 325,
+   "w": 640,
+   "h": 480,
+   "b64": 55692
+  },
+  {
+   "t": 26.2071,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 26.3188,
+   "type": "video",
+   "seq": 326,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 26.4348,
+   "type": "video",
+   "seq": 327,
+   "w": 640,
+   "h": 480,
+   "b64": 55792
+  },
+  {
+   "t": 26.4351,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 26.5474,
+   "type": "video",
+   "seq": 328,
+   "w": 640,
+   "h": 480,
+   "b64": 55728
+  },
+  {
+   "t": 26.6628,
+   "type": "video",
+   "seq": 329,
+   "w": 640,
+   "h": 480,
+   "b64": 55672
+  },
+  {
+   "t": 26.6631,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 26.7748,
+   "type": "video",
+   "seq": 330,
+   "w": 640,
+   "h": 480,
+   "b64": 55724
+  },
+  {
+   "t": 26.8872,
+   "type": "video",
+   "seq": 331,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 26.8874,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.1,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 27.0027,
+   "type": "video",
+   "seq": 332,
+   "w": 640,
+   "h": 480,
+   "b64": 55732
+  },
+  {
+   "t": 27.1147,
+   "type": "video",
+   "seq": 333,
+   "w": 640,
+   "h": 480,
+   "b64": 55760
+  },
+  {
+   "t": 27.115,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 27.2268,
+   "type": "video",
+   "seq": 334,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 27.3429,
+   "type": "video",
+   "seq": 335,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 27.3432,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 27.4548,
+   "type": "video",
+   "seq": 336,
+   "w": 640,
+   "h": 480,
+   "b64": 55808
+  },
+  {
+   "t": 27.5668,
+   "type": "video",
+   "seq": 337,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 27.5671,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 27.6828,
+   "type": "video",
+   "seq": 338,
+   "w": 640,
+   "h": 480,
+   "b64": 55764
+  },
+  {
+   "t": 27.7948,
+   "type": "video",
+   "seq": 339,
+   "w": 640,
+   "h": 480,
+   "b64": 55832
+  },
+  {
+   "t": 27.7952,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 27.9069,
+   "type": "video",
+   "seq": 340,
+   "w": 640,
+   "h": 480,
+   "b64": 55856
+  },
+  {
+   "t": 28.0227,
+   "type": "video",
+   "seq": 341,
+   "w": 640,
+   "h": 480,
+   "b64": 55816
+  },
+  {
+   "t": 28.023,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 28.1347,
+   "type": "video",
+   "seq": 342,
+   "w": 640,
+   "h": 480,
+   "b64": 55912
+  },
+  {
+   "t": 28.2468,
+   "type": "video",
+   "seq": 343,
+   "w": 640,
+   "h": 480,
+   "b64": 55628
+  },
+  {
+   "t": 28.247,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 28.3627,
+   "type": "video",
+   "seq": 344,
+   "w": 640,
+   "h": 480,
+   "b64": 55712
+  },
+  {
+   "t": 28.4775,
+   "type": "video",
+   "seq": 345,
+   "w": 640,
+   "h": 480,
+   "b64": 55716
+  },
+  {
+   "t": 28.4777,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 19.4,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 28.5868,
+   "type": "video",
+   "seq": 346,
+   "w": 640,
+   "h": 480,
+   "b64": 55724
+  },
+  {
+   "t": 28.7067,
+   "type": "video",
+   "seq": 347,
+   "w": 640,
+   "h": 480,
+   "b64": 55764
+  },
+  {
+   "t": 28.7072,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 28.8195,
+   "type": "video",
+   "seq": 348,
+   "w": 640,
+   "h": 480,
+   "b64": 55740
+  },
+  {
+   "t": 28.9353,
+   "type": "video",
+   "seq": 349,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 28.9358,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 29.0476,
+   "type": "video",
+   "seq": 350,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 29.1562,
+   "type": "video",
+   "seq": 351,
+   "w": 640,
+   "h": 480,
+   "b64": 55836
+  },
+  {
+   "t": 29.1567,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 29.2711,
+   "type": "video",
+   "seq": 352,
+   "w": 640,
+   "h": 480,
+   "b64": 55632
+  },
+  {
+   "t": 29.3832,
+   "type": "video",
+   "seq": 353,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 29.3835,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 29.4952,
+   "type": "video",
+   "seq": 354,
+   "w": 640,
+   "h": 480,
+   "b64": 55724
+  },
+  {
+   "t": 29.6108,
+   "type": "video",
+   "seq": 355,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 29.6111,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 29.7227,
+   "type": "video",
+   "seq": 356,
+   "w": 640,
+   "h": 480,
+   "b64": 55704
+  },
+  {
+   "t": 29.8348,
+   "type": "video",
+   "seq": 357,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 29.8351,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 29.9507,
+   "type": "video",
+   "seq": 358,
+   "w": 640,
+   "h": 480,
+   "b64": 55712
+  },
+  {
+   "t": 30.0632,
+   "type": "video",
+   "seq": 359,
+   "w": 640,
+   "h": 480,
+   "b64": 55708
+  },
+  {
+   "t": 30.0635,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.1,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 30.1788,
+   "type": "video",
+   "seq": 360,
+   "w": 640,
+   "h": 480,
+   "b64": 55836
+  },
+  {
+   "t": 30.2953,
+   "type": "video",
+   "seq": 361,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 30.2957,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 30.4075,
+   "type": "video",
+   "seq": 362,
+   "w": 640,
+   "h": 480,
+   "b64": 55748
+  },
+  {
+   "t": 30.5194,
+   "type": "video",
+   "seq": 363,
+   "w": 640,
+   "h": 480,
+   "b64": 55876
+  },
+  {
+   "t": 30.5199,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 30.6354,
+   "type": "video",
+   "seq": 364,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 30.7477,
+   "type": "video",
+   "seq": 365,
+   "w": 640,
+   "h": 480,
+   "b64": 55772
+  },
+  {
+   "t": 30.7482,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.2,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 30.8594,
+   "type": "video",
+   "seq": 366,
+   "w": 640,
+   "h": 480,
+   "b64": 55700
+  },
+  {
+   "t": 30.9752,
+   "type": "video",
+   "seq": 367,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 30.9757,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 31.0878,
+   "type": "video",
+   "seq": 368,
+   "w": 640,
+   "h": 480,
+   "b64": 55856
+  },
+  {
+   "t": 31.2032,
+   "type": "video",
+   "seq": 369,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 31.2037,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 31.3153,
+   "type": "video",
+   "seq": 370,
+   "w": 640,
+   "h": 480,
+   "b64": 55888
+  },
+  {
+   "t": 31.4274,
+   "type": "video",
+   "seq": 371,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 31.4278,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 31.5454,
+   "type": "video",
+   "seq": 372,
+   "w": 640,
+   "h": 480,
+   "b64": 55836
+  },
+  {
+   "t": 31.6554,
+   "type": "video",
+   "seq": 373,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 31.6559,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 31.7676,
+   "type": "video",
+   "seq": 374,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 31.8834,
+   "type": "video",
+   "seq": 375,
+   "w": 640,
+   "h": 480,
+   "b64": 55712
+  },
+  {
+   "t": 31.8839,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 31.9953,
+   "type": "video",
+   "seq": 376,
+   "w": 640,
+   "h": 480,
+   "b64": 55820
+  },
+  {
+   "t": 32.1074,
+   "type": "video",
+   "seq": 377,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 32.1079,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 18.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 32.2234,
+   "type": "video",
+   "seq": 378,
+   "w": 640,
+   "h": 480,
+   "b64": 55704
+  },
+  {
+   "t": 32.3353,
+   "type": "video",
+   "seq": 379,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 32.3357,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 32.4474,
+   "type": "video",
+   "seq": 380,
+   "w": 640,
+   "h": 480,
+   "b64": 55844
+  },
+  {
+   "t": 32.5633,
+   "type": "video",
+   "seq": 381,
+   "w": 640,
+   "h": 480,
+   "b64": 55796
+  },
+  {
+   "t": 32.5637,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 32.6759,
+   "type": "video",
+   "seq": 382,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 32.7872,
+   "type": "video",
+   "seq": 383,
+   "w": 640,
+   "h": 480,
+   "b64": 55732
+  },
+  {
+   "t": 32.7877,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 32.9032,
+   "type": "video",
+   "seq": 384,
+   "w": 640,
+   "h": 480,
+   "b64": 55676
+  },
+  {
+   "t": 33.0121,
+   "type": "video",
+   "seq": 385,
+   "w": 640,
+   "h": 480,
+   "b64": 55808
+  },
+  {
+   "t": 33.0124,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.2,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 33.1232,
+   "type": "video",
+   "seq": 386,
+   "w": 640,
+   "h": 480,
+   "b64": 55700
+  },
+  {
+   "t": 33.2391,
+   "type": "video",
+   "seq": 387,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 33.2395,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 33.3513,
+   "type": "video",
+   "seq": 388,
+   "w": 640,
+   "h": 480,
+   "b64": 55768
+  },
+  {
+   "t": 33.4671,
+   "type": "video",
+   "seq": 389,
+   "w": 640,
+   "h": 480,
+   "b64": 55732
+  },
+  {
+   "t": 33.4674,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 33.5791,
+   "type": "video",
+   "seq": 390,
+   "w": 640,
+   "h": 480,
+   "b64": 55860
+  },
+  {
+   "t": 33.6913,
+   "type": "video",
+   "seq": 391,
+   "w": 640,
+   "h": 480,
+   "b64": 55884
+  },
+  {
+   "t": 33.6916,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 33.8073,
+   "type": "video",
+   "seq": 392,
+   "w": 640,
+   "h": 480,
+   "b64": 55732
+  },
+  {
+   "t": 33.9203,
+   "type": "video",
+   "seq": 393,
+   "w": 640,
+   "h": 480,
+   "b64": 55732
+  },
+  {
+   "t": 33.9207,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 34.0309,
+   "type": "video",
+   "seq": 394,
+   "w": 640,
+   "h": 480,
+   "b64": 55608
+  },
+  {
+   "t": 34.1472,
+   "type": "video",
+   "seq": 395,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 34.1476,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 34.2591,
+   "type": "video",
+   "seq": 396,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 34.3711,
+   "type": "video",
+   "seq": 397,
+   "w": 640,
+   "h": 480,
+   "b64": 55764
+  },
+  {
+   "t": 34.3716,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 34.4872,
+   "type": "video",
+   "seq": 398,
+   "w": 640,
+   "h": 480,
+   "b64": 55656
+  },
+  {
+   "t": 34.6,
+   "type": "video",
+   "seq": 399,
+   "w": 640,
+   "h": 480,
+   "b64": 55780
+  },
+  {
+   "t": 34.6003,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.3,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 34.7112,
+   "type": "video",
+   "seq": 400,
+   "w": 640,
+   "h": 480,
+   "b64": 55752
+  },
+  {
+   "t": 34.8271,
+   "type": "video",
+   "seq": 401,
+   "w": 640,
+   "h": 480,
+   "b64": 55712
+  },
+  {
+   "t": 34.8274,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 34.9392,
+   "type": "video",
+   "seq": 402,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 35.0508,
+   "type": "video",
+   "seq": 403,
+   "w": 640,
+   "h": 480,
+   "b64": 55624
+  },
+  {
+   "t": 35.0511,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 35.1669,
+   "type": "video",
+   "seq": 404,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 35.2789,
+   "type": "video",
+   "seq": 405,
+   "w": 640,
+   "h": 480,
+   "b64": 55748
+  },
+  {
+   "t": 35.2792,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 35.3908,
+   "type": "video",
+   "seq": 406,
+   "w": 640,
+   "h": 480,
+   "b64": 55756
+  },
+  {
+   "t": 35.5068,
+   "type": "video",
+   "seq": 407,
+   "w": 640,
+   "h": 480,
+   "b64": 55796
+  },
+  {
+   "t": 35.5071,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 35.6188,
+   "type": "video",
+   "seq": 408,
+   "w": 640,
+   "h": 480,
+   "b64": 55720
+  },
+  {
+   "t": 35.7348,
+   "type": "video",
+   "seq": 409,
+   "w": 640,
+   "h": 480,
+   "b64": 55648
+  },
+  {
+   "t": 35.7351,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 35.8472,
+   "type": "video",
+   "seq": 410,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 35.9592,
+   "type": "video",
+   "seq": 411,
+   "w": 640,
+   "h": 480,
+   "b64": 55716
+  },
+  {
+   "t": 35.9595,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 36.0751,
+   "type": "video",
+   "seq": 412,
+   "w": 640,
+   "h": 480,
+   "b64": 55672
+  },
+  {
+   "t": 36.187,
+   "type": "video",
+   "seq": 413,
+   "w": 640,
+   "h": 480,
+   "b64": 55676
+  },
+  {
+   "t": 36.1874,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 36.2992,
+   "type": "video",
+   "seq": 414,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 36.4153,
+   "type": "video",
+   "seq": 415,
+   "w": 640,
+   "h": 480,
+   "b64": 55596
+  },
+  {
+   "t": 36.4156,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 36.5277,
+   "type": "video",
+   "seq": 416,
+   "w": 640,
+   "h": 480,
+   "b64": 55644
+  },
+  {
+   "t": 36.6392,
+   "type": "video",
+   "seq": 417,
+   "w": 640,
+   "h": 480,
+   "b64": 55676
+  },
+  {
+   "t": 36.6397,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 36.7552,
+   "type": "video",
+   "seq": 418,
+   "w": 640,
+   "h": 480,
+   "b64": 55800
+  },
+  {
+   "t": 36.8676,
+   "type": "video",
+   "seq": 419,
+   "w": 640,
+   "h": 480,
+   "b64": 55688
+  },
+  {
+   "t": 36.8681,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.0,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 36.9791,
+   "type": "video",
+   "seq": 420,
+   "w": 640,
+   "h": 480,
+   "b64": 55716
+  },
+  {
+   "t": 37.0951,
+   "type": "video",
+   "seq": 421,
+   "w": 640,
+   "h": 480,
+   "b64": 55732
+  },
+  {
+   "t": 37.0954,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 37.2071,
+   "type": "video",
+   "seq": 422,
+   "w": 640,
+   "h": 480,
+   "b64": 55828
+  },
+  {
+   "t": 37.3188,
+   "type": "video",
+   "seq": 423,
+   "w": 640,
+   "h": 480,
+   "b64": 55756
+  },
+  {
+   "t": 37.3191,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 37.4347,
+   "type": "video",
+   "seq": 424,
+   "w": 640,
+   "h": 480,
+   "b64": 55612
+  },
+  {
+   "t": 37.5468,
+   "type": "video",
+   "seq": 425,
+   "w": 640,
+   "h": 480,
+   "b64": 55780
+  },
+  {
+   "t": 37.5471,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 37.665,
+   "type": "video",
+   "seq": 426,
+   "w": 640,
+   "h": 480,
+   "b64": 55784
+  },
+  {
+   "t": 37.7751,
+   "type": "video",
+   "seq": 427,
+   "w": 640,
+   "h": 480,
+   "b64": 55740
+  },
+  {
+   "t": 37.7755,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 37.8872,
+   "type": "video",
+   "seq": 428,
+   "w": 640,
+   "h": 480,
+   "b64": 55844
+  },
+  {
+   "t": 38.003,
+   "type": "video",
+   "seq": 429,
+   "w": 640,
+   "h": 480,
+   "b64": 55644
+  },
+  {
+   "t": 38.0035,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 38.1151,
+   "type": "video",
+   "seq": 430,
+   "w": 640,
+   "h": 480,
+   "b64": 55728
+  },
+  {
+   "t": 38.2272,
+   "type": "video",
+   "seq": 431,
+   "w": 640,
+   "h": 480,
+   "b64": 55776
+  },
+  {
+   "t": 38.2276,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 38.3431,
+   "type": "video",
+   "seq": 432,
+   "w": 640,
+   "h": 480,
+   "b64": 55684
+  },
+  {
+   "t": 38.4553,
+   "type": "video",
+   "seq": 433,
+   "w": 640,
+   "h": 480,
+   "b64": 55700
+  },
+  {
+   "t": 38.4556,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 17.3,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 38.5669,
+   "type": "video",
+   "seq": 434,
+   "w": 640,
+   "h": 480,
+   "b64": 55656
+  },
+  {
+   "t": 38.6828,
+   "type": "video",
+   "seq": 435,
+   "w": 640,
+   "h": 480,
+   "b64": 55836
+  },
+  {
+   "t": 38.6831,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 38.7949,
+   "type": "video",
+   "seq": 436,
+   "w": 640,
+   "h": 480,
+   "b64": 55804
+  },
+  {
+   "t": 38.9067,
+   "type": "video",
+   "seq": 437,
+   "w": 640,
+   "h": 480,
+   "b64": 55692
+  },
+  {
+   "t": 38.907,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 39.0228,
+   "type": "video",
+   "seq": 438,
+   "w": 640,
+   "h": 480,
+   "b64": 55760
+  },
+  {
+   "t": 39.1355,
+   "type": "video",
+   "seq": 439,
+   "w": 640,
+   "h": 480,
+   "b64": 55672
+  },
+  {
+   "t": 39.1358,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.9,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 39.2472,
+   "type": "video",
+   "seq": 440,
+   "w": 640,
+   "h": 480,
+   "b64": 55688
+  },
+  {
+   "t": 39.3632,
+   "type": "video",
+   "seq": 441,
+   "w": 640,
+   "h": 480,
+   "b64": 55636
+  },
+  {
+   "t": 39.3635,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 39.4752,
+   "type": "video",
+   "seq": 442,
+   "w": 640,
+   "h": 480,
+   "b64": 55704
+  },
+  {
+   "t": 39.5871,
+   "type": "video",
+   "seq": 443,
+   "w": 640,
+   "h": 480,
+   "b64": 55736
+  },
+  {
+   "t": 39.5875,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.7,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 39.7031,
+   "type": "video",
+   "seq": 444,
+   "w": 640,
+   "h": 480,
+   "b64": 55684
+  },
+  {
+   "t": 39.8152,
+   "type": "video",
+   "seq": 445,
+   "w": 640,
+   "h": 480,
+   "b64": 55768
+  },
+  {
+   "t": 39.8155,
+   "type": "status",
+   "fps": 8.8,
+   "latency_ms": 16.8,
+   "state": "USER_AWAY",
+   "present": false
+  },
+  {
+   "t": 39.9311,
+   "type": "video",
+   "seq": 446,
+   "w": 640,
+   "h": 480,
+   "b64": 55744
+  },
+  {
+   "t": 40.044,
+   "type": "video",
+   "seq": 447,
+   "w": 640,
+   "h": 480,
+   "b64": 55780
+  }
+ ]
+}

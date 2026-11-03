@@ -5,3 +5,7 @@ __pycache__/
 *.pyc
 posture_guard_out.png
 *.tmp
+assets/voice/.neural_mp3/
+# 原始遥测流 / 视频抓帧：体积大且不是可复现证据，不入库
+evidence/**/raw/
+dist/

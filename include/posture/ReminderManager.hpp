@@ -33,6 +33,12 @@ class ReminderManager {
   bool Consider(const std::vector<RuleTrigger>& triggers, SteadyTime now,
                 Notification* out);
 
+  // UI classification is fast; notifications require this same posture to remain stable.
+  bool ConsiderPosture(const PostureObservation& obs, SteadyTime now, Notification* out, std::uint64_t frame_id = 0);
+  int bad_frames() const { return bad_frames_; }
+  double posture_cooldown_remaining_s(SteadyTime now) const;
+  const std::string& posture_reason() const { return posture_reason_; }
+
   // 免打扰：忽略若干分钟
   void Snooze(double seconds, SteadyTime now);
   void ClearSnooze();
@@ -45,9 +51,27 @@ class ReminderManager {
 
  private:
   Config cfg_;
+  int bad_frames_ = 0;
+  int normal_frames_ = 0;
+  std::uint64_t last_frame_id_ = 0;
+  std::optional<SteadyTime> last_observation_at_;
+  std::string current_posture_key_;
+  std::string posture_reason_ = "waiting_frames";
   std::map<std::string, SteadyTime> last_notified_;
   std::optional<SteadyTime> snooze_until_;
   std::optional<SteadyTime> last_rest_;
+  std::string pending_posture_key_;
+  std::optional<SteadyTime> pending_posture_since_;
+  // ★ 毛刺容忍。
+  //   旧逻辑：状态一变就重置计时，于是稳定低头中偶尔一帧被判成「正常」
+  //   就要重新数满门限 —— 实测同一姿势被拖到 4.9 秒才播报。
+  //   新模型：候选键（candidate）单独计时，短时间内回到主键即视为抖动、
+  //   主键计时不受影响；候选键持续超过容忍时长则扶正为新的主键。
+  //   ★ 播报永远按【当前帧的键】用【它自己的】起始时间计，所以刚切换的
+  //   姿势绝不会蹭用上一个姿势攒下的时长（踩过：会立即误播）。
+  std::string candidate_key_;
+  std::optional<SteadyTime> candidate_since_;
+  static constexpr double kGlitchMaxS = 0.20;   // 约 5 帧 @ 25fps
 };
 
 }  // namespace posture

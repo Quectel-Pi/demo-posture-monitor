@@ -38,17 +38,25 @@ std::string TodayDate() {
   return now.substr(0, 10);
 }
 
-// 从 jsonl 行里抽 "key":number（只服务本系统自己写的格式）
+// 从 jsonl 行里抽 "key":number
+//
+// ★ 必须容忍冒号后的空白。UI 用 python 的 json.dumps 生成消息，默认分隔符是
+//   ", " 和 ": "（冒号后带一个空格），即 '{"minutes": 15}'；而本函数原来只认
+//   '{"minutes":15}'。实测踩过：snooze 命令的 minutes 永远取默认值。
+//   日志/统计行是本系统自己写的紧凑格式，跳过空白不影响它们。
 double ExtractNumber(const std::string& text, const std::string& key, double def) {
   const std::string needle = "\"" + key + "\":";
   const size_t pos = text.find(needle);
   if (pos == std::string::npos) return def;
   size_t b = pos + needle.size();
+  while (b < text.size() && std::isspace(static_cast<unsigned char>(text[b]))) ++b;
   size_t e = b;
   while (e < text.size() && (std::isdigit(static_cast<unsigned char>(text[e])) ||
-                             text[e] == '-' || text[e] == '.' || text[e] == 'e')) {
+                             text[e] == '-' || text[e] == '.' || text[e] == 'e' ||
+                             text[e] == 'E' || text[e] == '+')) {
     ++e;
   }
+  if (e == b) return def;   // 没有数字，别让 stod 去猜
   try {
     return std::stod(text.substr(b, e - b));
   } catch (...) {
@@ -56,13 +64,27 @@ double ExtractNumber(const std::string& text, const std::string& key, double def
   }
 }
 
+// 从 jsonl 行里抽 "key":"value"
+//
+// ★ 同上：必须容忍冒号后的空白。UI 发的是 '{"cmd": "ack"}'（json.dumps 默认带空格），
+//   而本函数原来只找 '"cmd":"'（冒号后紧跟引号）。
+//   后果实测：**所有 UI 上行命令（ack / snooze / calibrate）全部被静默丢弃** ——
+//   护眼遮罩上的「我已经休息好了」按钮点了毫无反应，日志里连一行都没有，
+//   因为解析失败的命令既不报错也不记录。
 bool ExtractString(const std::string& text, const std::string& key, std::string* out) {
-  const std::string needle = "\"" + key + "\":\"";
+  const std::string needle = "\"" + key + "\":";
   const size_t pos = text.find(needle);
   if (pos == std::string::npos) return false;
-  const size_t b = pos + needle.size();
-  const size_t e = text.find('"', b);
-  if (e == std::string::npos) return false;
+  size_t b = pos + needle.size();
+  while (b < text.size() && std::isspace(static_cast<unsigned char>(text[b]))) ++b;
+  if (b >= text.size() || text[b] != '"') return false;
+  ++b;                                          // 跳过开引号
+  size_t e = b;
+  while (e < text.size() && text[e] != '"') {
+    if (text[e] == '\\' && e + 1 < text.size()) ++e;   // 跳过转义字符
+    ++e;
+  }
+  if (e >= text.size()) return false;
   *out = text.substr(b, e - b);
   return true;
 }
@@ -232,6 +254,12 @@ std::string Notifier::SerializeStatus(const StatusSnapshot& s) const {
       .Str("posture_state", s.posture_state)
       .Str("posture_state_zh", s.posture_state_zh)
       .Str("explanation", s.explanation)
+      .Int("bad_posture_frames", s.bad_posture_frames)
+      .Int("posture_reminder_frames", cfg_.posture_reminder_frames)
+      .Str("posture_reminder_reason", s.posture_reminder_reason)
+      .Num("posture_reminder_cooldown_s", s.posture_reminder_cooldown_s, 1)
+      .Str("last_notification_key", last_event_key_)
+      .Str("last_notification_id", last_event_id_)
       .Bool("voice_enabled", cfg_.voice)
       .Num("far_look_s", cfg_.far_look_s, 1)
       .Num("rest_remaining_s", s.rest_remaining_s, 1)
@@ -258,6 +286,10 @@ std::string Notifier::SerializeStatus(const StatusSnapshot& s) const {
       .Bool("wrist_above_shoulder", s.metrics.wrist_above_shoulder)
       .Num("wrist_y_rel", s.metrics.wrist_y_rel, 3)
       .Bool("wrist_valid", s.metrics.wrist_valid)
+      .Bool("face_geom_valid", s.metrics.face_geom_valid)
+      .Num("face_wrist_ear", s.metrics.face_wrist_ear, 3)
+      .Num("face_arm_raise", s.metrics.face_arm_raise, 3)
+      .Num("face_wrist_below_ear", s.metrics.face_wrist_below_ear, 3)
       .Str("session_state", s.session_state)
       .Num("use_s", s.use_s, 1)
       .Num("remaining_s", s.remaining_s, 0)
@@ -379,8 +411,11 @@ void Notifier::PublishVideo(const std::vector<unsigned char>& jpeg, int width, i
 
 void Notifier::EmitEvent(const std::string& key, const std::string& title,
                          const std::string& detail, double active_s) {
+  last_event_key_ = key;
+  last_event_id_ = WallNowString() + "/" + std::to_string(++event_sequence_);
   Json j;
   j.Str("type", "notification")
+      .Str("id", last_event_id_)
       .Str("key", key)
       .Str("title", title)
       .Str("detail", detail)

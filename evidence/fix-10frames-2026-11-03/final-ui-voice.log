@@ -1,0 +1,9 @@
+[ui] 等待后台服务 /run/posture-guard/status.sock，界面将自动重连
+MESA: error: ZINK: vkCreateInstance failed (VK_ERROR_INCOMPATIBLE_DRIVER)
+
+(python3:2092293): Gtk-CRITICAL **: 13:12:45.232: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
+[voice] 开始播放 head_down
+[voice] 播放完成 head_down
+active
+2092284 sudo -u quectel env XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 GSK_RENDERER=ngl python3 -u /opt/posture-guard/ui/posture_guard_ui.py
+2092293 python3 -u /opt/posture-guard/ui/posture_guard_ui.py

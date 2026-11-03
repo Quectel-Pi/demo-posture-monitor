@@ -30,6 +30,7 @@ class EyeCareMonitor {
     SessionState state = SessionState::kAbsent;
     double active_s = 0.0;        // 本会话已连续用眼秒数
     double remaining_s = 0.0;     // 距下次休息提醒还剩多少秒
+    double rest_remaining_s = 0.0;  // remaining minimum rest time, based on service clock
     bool rest_due_now = false;    // 本帧刚触发休息提醒（只 true 一次）
     bool session_reset = false;   // 本帧因离开而结束了会话
     bool present = false;

@@ -1,0 +1,25 @@
+== 采集「歪头」 15 秒 ==
+   要领：头向一侧明显歪 20~30°（耳朵靠向同侧肩膀），保持不动
+
+   请摆好姿势… 5      请摆好姿势… 4      请摆好姿势… 3      请摆好姿势… 2      请摆好姿势… 1      采集中（15 秒），保持别动…          
+
+   有效样本 70/70 帧，已存 /var/lib/posture-guard/posture-samples-current/head_tilt.json
+   各特征中位数：
+     head_drop      (头低量)  中位   +0.335   范围 [ +0.267,  +0.356]
+     ear_tilt       (耳线歪)  中位  +15.824   范围 [+11.724, +19.824]
+     shoulder_tilt  (肩线歪)  中位   +4.200   范围 [ +1.700,  +8.400]
+     size           (靠近倍数)  中位   +1.155   范围 [ +1.120,  +1.202]
+     wrist_rise     (抬手量)  中位   +0.311   范围 [ +0.169,  +0.392]
+     wrist_near     (手离鼻)  中位   +0.825   范围 [ +0.734,  +0.885]
+     wrist_face     (手离耳)  中位   +1.003   范围 [ +0.927,  +1.070]
+
+   == 和「正常」的可分性 ==
+     ✅ head_drop       normal  +0.089  vs  head_tilt  +0.335   差  0.246  分离比  4.92
+     ✅ ear_tilt        normal  +3.576  vs  head_tilt +15.824   差 12.248  分离比  4.08
+     ✅ shoulder_tilt   normal  +0.000  vs  head_tilt  +4.200   差  4.200  分离比  2.10
+     ⚠️ size            normal  +1.200  vs  head_tilt  +1.155   差  0.045  分离比  1.12
+        wrist_rise      normal  +0.266  vs  head_tilt  +0.311   差  0.045  分离比  0.45
+     ✅ wrist_near      normal  +1.235  vs  head_tilt  +0.825   差  0.410  分离比  2.73
+        wrist_face      有一组缺测，不参与可分性评估
+
+   ✅ 可判：靠「耳线歪」(分离比 4.08) 能把这个姿势和正常分开

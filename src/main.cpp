@@ -378,7 +378,11 @@ int main(int argc, char** argv) {
       profile_loaded = !profile.empty();
     }
     if (profile_loaded) {
-      analyzer.SetProfile(&profile, cfg.profile_hold_s, cfg.profile_accept_radius);
+      analyzer.SetProfile(&profile, cfg.profile_hold_s, cfg.profile_accept_radius,
+                          cfg.profile_release_ratio);
+      analyzer.SetHoldOverrides(cfg.profile_hold_hand_face_s, cfg.profile_hold_head_tilt_s,
+                                cfg.profile_hold_head_down_s,
+                                cfg.profile_hold_too_close_s);
       LOG_INFO("已加载逐姿势画像 ", cfg.profile_file, "（", profile.total_samples(),
                " 个样本）");
     } else {
@@ -584,7 +588,7 @@ int main(int argc, char** argv) {
       // ---- 坐姿提醒 ----
       Notification notify;
       // Fast display classification and audible reminder timing are independent.
-      if (reminders.ConsiderPosture(obs, now, &notify)) {
+      if (reminders.ConsiderPosture(obs, now, &notify, frame.frame_id)) {
         notifier.EmitEvent(notify.key, notify.title, notify.detail, notify.active_s);
         stats.AddAlert(notify.key, notify.active_s);
         last_notification_at = now_ms;
@@ -621,12 +625,10 @@ int main(int argc, char** argv) {
               probe.head_offset_y = static_cast<float>(oy[oy.size() / 2]);
               const std::string why = analyzer.CheckBaselineDrift(probe);
               if (!why.empty()) {
-                LOG_WARN("校准基准已失效：", why);
-                LOG_WARN("旧基准会让所有阈值都算偏，现作废并自动重新校准");
-                std::remove(cfg.baseline_file.c_str());
-                analyzer.SetBaseline(Baseline{});
-                calibration.Start(now, camera.DeviceId(), frame.width, frame.height,
-                                  engine->model_sha256());
+                LOG_WARN("基准一致性提示：", why);
+                // A user leaning toward the screen is not proof that the camera moved.
+                // Never learn an abnormal startup pose as the new normal automatically.
+                checker_roll_hint = "取景与基准有变化，请坐正后按需重新校准：" + why;
               } else {
                 LOG_INFO("校准基准与当前画面对得上（肩宽占比 ",
                          static_cast<double>(probe.width_ratio), "），继续使用");
@@ -819,6 +821,9 @@ int main(int argc, char** argv) {
         }
       }
 
+      snapshot.bad_posture_frames = reminders.bad_frames();
+      snapshot.posture_reminder_cooldown_s = reminders.posture_cooldown_remaining_s(now);
+      snapshot.posture_reminder_reason = reminders.posture_reason();
       snapshot.snoozed = reminders.snoozed(now);
       snapshot.baseline_hint = checker_roll_hint;
       snapshot.last_notification_ago_s =

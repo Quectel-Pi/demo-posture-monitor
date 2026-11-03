@@ -1,0 +1,3 @@
+file=/var/lib/posture-guard/precision-held-checks/normal-135140.json
+held_state_counts_after_1s={"NORMAL": 43}
+notifications=[]

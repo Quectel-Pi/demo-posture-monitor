@@ -1,0 +1,2 @@
+{"frame_id": 1, "posture_state": "UNKNOWN", "explanation": "姿势画像缺少标定版本，请重新采集并生成画像", "face_geom_valid": true, "face_wrist_ear": 1.19, "bad_posture_frames": 0, "fps": 0.0, "latency_ms": 19.7}
+deployed and status schema verified

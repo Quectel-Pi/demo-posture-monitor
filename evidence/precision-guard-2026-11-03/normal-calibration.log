@@ -1,0 +1,20 @@
+backup=/userdata/precision-guard-backup-20261103-132041
+NEW_BASELINE={"valid":true,"ear_angle_valid":true,"ear_angle_deg":-3.576,"wrist_valid":true,"wrist_y_rel":0.835,"ear_mid_valid":true,"ear_mid_offset_y":-0.618,"shoulder_angle_deg":0.000,"head_offset_x":0.0176,"head_offset_y":-0.4997,"head_axis_deg":2.021,"width_ratio":0.4242,"samples":126,"frame_width":640,"frame_height":480,"camera_id":"/dev/v4l/by-id/usb-UGREEN_Camera_1080P_UGREEN_Camera_1080P_SN0001-video-index0","model_sha256":"5c25db4f6ac4fb99e289ee740bced7d2bc4d408584acc1e88c03c9f3d0793a89","created_at":"2026-11-03T13:20:46.747"}
+
+== 采集「正常」 15 秒 ==
+   要领：坐直、双手放桌面、别歪头别低头。
+   ★ 但要「像平时一样自然」：轻微转头看屏幕不同位置、手在键盘上小动。
+     全程僵住不动反而不好 —— 转头会改变耳线投影角，僵着采到的正态
+     范围太窄，实际用起来一点点转头就被判成歪头（实测踩过）。
+
+   请摆好姿势… 5      请摆好姿势… 4      请摆好姿势… 3      请摆好姿势… 2      请摆好姿势… 1      采集中（15 秒），保持别动…          
+
+   有效样本 71/71 帧，已存 /var/lib/posture-guard/posture-samples-current/normal.json
+   各特征中位数：
+     head_drop      (头低量)  中位   +0.089   范围 [ +0.052,  +0.118]
+     ear_tilt       (耳线歪)  中位   +3.576   范围 [ +0.124,  +5.276]
+     shoulder_tilt  (肩线歪)  中位   +0.000   范围 [ +0.000,  +1.700]
+     size           (靠近倍数)  中位   +1.200   范围 [ +1.165,  +1.247]
+     wrist_rise     (抬手量)  中位   +0.266   范围 [ +0.237,  +0.306]
+     wrist_near     (手离鼻)  中位   +1.235   范围 [ +1.116,  +1.288]
+     wrist_face     (手离耳)  中位   +3.000   范围 [ +3.000,  +3.000]

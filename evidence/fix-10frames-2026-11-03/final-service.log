@@ -1,0 +1,41 @@
+2026-11-03T13:12:43.441 [INFO ] 画像判定切换：低头/趴桌 -> 歪头  命中 ear_tilt >= 13.350（阈值 13.350，实测 14.545）  强度 0.398201  特征 head_drop=0.167174 ear_tilt=14.5446 size=1.16005 wrist_rise=-0.0749131 wrist_near=1.05081 wrist_face=1.21802 below_ear=1.02174  投票 13/16 (0.6s)
+2026-11-03T13:12:43.490 [INFO ] 采集线程退出，共采集 1744 帧
+2026-11-03T13:12:43.508 [INFO ] 监控线程退出
+2026-11-03T13:12:43.949 [INFO ] posture_guard 已退出
+2026-11-03T13:12:44.918 [INFO ] posture_guard 1.0.0 启动，配置 /etc/posture-guard/posture.yaml
+2026-11-03T13:12:44.918 [INFO ] 生效配置:
+camera=/dev/v4l/by-id/usb-UGREEN_Camera_1080P_UGREEN_Camera_1080P_SN0001-video-index0 640x480@30fps infer=25fps fmt=auto
+focus: autofocus=off absolute=70 exposure=-1
+model=/opt/posture-guard/models/yolov8n-pose.rknn pose_conf=0.45 joint_conf=0.45
+roi=0.1,0.05,0.8,0.9
+baseline=/var/lib/posture-guard/baseline.json calibration=5s
+shoulder: trigger=12deg recover=8deg hold=0.5s rec_hold=0.35s missing_timeout=1.5s
+approx: head_down_drop_ratio=0.25 (min 0.1 max 0.35) head_tilt_deg=18 too_close_rel=1.35 (abs 0.75) hand_face_ratio=0.95
+eye_care: use=1200s far_look=20s presence=2s absent=10s policy=manual_ack_or_session_reset
+notify: posture_frames=10 legacy_hold=0.5s voice=on cooldown=60s log=on popup=off
+ui_video: stream=on w=640 fps=10 q=70
+runtime: socket=/run/posture-guard/status.sock state=/var/lib/posture-guard stats=/var/lib/posture-guard/stats
+2026-11-03T13:12:45.058 [INFO ] NPU 核掩码 0_1 已生效
+2026-11-03T13:12:45.058 [INFO ] 输出 0 shape=1x65x80x80x attr.size=416000 n_elems=416000 type=2
+2026-11-03T13:12:45.058 [INFO ] 输出 1 shape=1x65x40x40x attr.size=104000 n_elems=104000 type=2
+2026-11-03T13:12:45.058 [INFO ] 输出 2 shape=1x65x20x20x attr.size=26000 n_elems=26000 type=2
+2026-11-03T13:12:45.058 [INFO ] 输出 3 shape=1x17x3x8400x attr.size=428400 n_elems=428400 type=2
+2026-11-03T13:12:45.062 [INFO ] 输出张量 int8 就地反量化（zp/scale 取自 OUTPUT_ATTR）
+2026-11-03T13:12:45.062 [INFO ] RKNN 引擎就绪: /opt/posture-guard/models/yolov8n-pose.rknn 输入 640x640 输出 4 个 tensor, runtime 2.3.2 (429f97ae6b@2025-04-09T09:09:27) / drv 0.9.8
+2026-11-03T13:12:45.062 [INFO ] 模型 SHA256 5c25db4f6ac4fb99e289ee740bced7d2bc4d408584acc1e88c03c9f3d0793a89
+2026-11-03T13:12:45.062 [WARN ] RKNN w8a8 模型的关键点 conf 通道被量化破坏（恒为 0），关键点可信度改用人物框置信度代理 —— 见 docs/troubleshooting.md §1
+2026-11-03T13:12:45.062 [INFO ] 已加载校准基准（2026-11-03T12:41:06.621，样本 91 帧，肩线基准 5.064°）
+2026-11-03T13:12:45.063 [INFO ] 对焦已锁定：autofocus=0 focus_absolute=70
+2026-11-03T13:12:45.063 [INFO ] 摄像头能力：UGREEN Camera 1080P: UGREEN Cam [MJPG(1920x1080,1440x1080,1280x960,1280x720,1024x768,800x600,640x480,320x240,1920x1080) ]
+2026-11-03T13:12:45.098 [INFO ] 摄像头已打开 /dev/v4l/by-id/usb-UGREEN_Camera_1080P_UGREEN_Camera_1080P_SN0001-video-index0 实际 640x480@30fps 格式 MJPG（请求 640x480 MJPG）
+2026-11-03T13:12:45.098 [INFO ] 逐姿势画像已启用：5 个姿势 [正常 低头/趴桌 歪头 离屏太近 托腮 ]  总样本 114  保持门限 0.5s  接受半径 3  迟滞比例 0.5
+2026-11-03T13:12:45.098 [INFO ] 已加载逐姿势画像 /var/lib/posture-guard/postures.txt（114 个样本）
+2026-11-03T13:12:45.103 [INFO ] 已恢复今日统计：在座 6686s，不良 5017s，提醒 156 次
+2026-11-03T13:12:45.104 [INFO ] 状态 socket 已监听 /run/posture-guard/status.sock
+2026-11-03T13:12:45.745 [INFO ] UI 客户端已连接（当前 1 个）
+2026-11-03T13:12:46.062 [INFO ] 画像判定切换：（无） -> 低头/趴桌  命中 head_drop >= 0.103（阈值 0.103，实测 0.136）  强度 0.657719  特征 head_drop=0.136386 ear_tilt=4.08791 size=1.24888 wrist_rise=0.0285546 wrist_near=1.05631 wrist_face=1.11518 below_ear=0.949059  投票 12/12 (0.6s)
+2026-11-03T13:12:46.371 [INFO ] 校准基准与当前画面对得上（肩宽占比 0.473995），继续使用
+2026-11-03T13:12:46.405 [INFO ] [提醒] 低头/趴桌 — 请调整成正确姿势
+2026-11-03T13:12:47.629 [INFO ] 检测到用户已在座，开始用眼计时（阈值 1200s）
+2026-11-03T13:13:03.606 [INFO ] UI 客户端已连接（当前 2 个）
+2026-11-03T13:13:13.905 [INFO ] UI 客户端已连接（当前 3 个）

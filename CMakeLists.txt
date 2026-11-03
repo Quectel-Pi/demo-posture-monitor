@@ -99,4 +99,21 @@ add_executable(test_config tests/test_config.cpp)
 target_link_libraries(test_config PRIVATE posture_core)
 add_test(NAME config COMMAND test_config ${CMAKE_CURRENT_SOURCE_DIR}/config/posture.yaml)
 
+# 画像级联迟滞（PostureProfile::ClassifyHysteretic）—— 纯逻辑，无摄像头/NPU 依赖
+add_executable(test_profile_hysteresis tests/test_profile_hysteresis.cpp)
+target_link_libraries(test_profile_hysteresis PRIVATE posture_core)
+add_test(NAME profile_hysteresis COMMAND test_profile_hysteresis
+         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+# UI 上行命令解析（ack / snooze / calibrate）
+# 这类错误是静默失败：解析不出来的命令既不报错也不记录。
+# 实测踩过「我已经休息好了」按钮完全无反应（ExtractString 只认无空格 JSON），
+# 12 小时生产日志里「用户确认已休息」出现 0 次。必须有回归保护。
+add_executable(test_command_parse tests/test_command_parse.cpp)
+add_test(NAME command_parse COMMAND test_command_parse)
+
+add_executable(test_rknn_decode tests/test_rknn_decode.cpp)
+target_link_libraries(test_rknn_decode PRIVATE posture_core)
+add_test(NAME rknn_decode COMMAND test_rknn_decode)
+
 install(TARGETS posture_guard RUNTIME DESTINATION bin)

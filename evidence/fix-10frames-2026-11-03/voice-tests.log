@@ -1,0 +1,13 @@
+..[voice] 开始播放 head_down
+[voice] 开始播放 head_tilt
+.[voice] 开始播放 head_down
+.[voice] 开始播放 head_down
+[voice] 播放器退出 1: Connection refused
+.[voice] 开始播放 head_down
+[voice] 开始播放 rest
+.[voice] 播放失败: paplay
+.
+----------------------------------------------------------------------
+Ran 7 tests in 0.028s
+
+OK

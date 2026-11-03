@@ -1,0 +1,25 @@
+== 采集「托腮」 15 秒 ==
+   要领：单手托住下巴/脸颊，肘撑桌面，保持不动
+
+   请摆好姿势… 5      请摆好姿势… 4      请摆好姿势… 3      请摆好姿势… 2      请摆好姿势… 1      采集中（15 秒），保持别动…          
+
+   有效样本 71/71 帧，已存 /var/lib/posture-guard/posture-samples-current/hand_face.json
+   各特征中位数：
+     head_drop      (头低量)  中位   +0.119   范围 [ +0.071,  +0.140]
+     ear_tilt       (耳线歪)  中位  +11.576   范围 [ +6.676, +17.176]
+     shoulder_tilt  (肩线歪)  中位   +7.300   范围 [ +7.000, +10.200]
+     size           (靠近倍数)  中位   +0.959   范围 [ +0.924,  +0.967]
+     wrist_rise     (抬手量)  中位   +0.532   范围 [ +0.456,  +0.620]
+     wrist_near     (手离鼻)  中位   +0.714   范围 [ +0.659,  +0.814]
+     wrist_face     (手离耳)  中位   +0.817   范围 [ +0.747,  +0.929]
+
+   == 和「正常」的可分性 ==
+        head_drop       normal  +0.089  vs  hand_face  +0.119   差  0.030  分离比  0.60
+     ✅ ear_tilt        normal  +3.576  vs  hand_face +11.576   差  8.000  分离比  2.67
+     ✅ shoulder_tilt   normal  +0.000  vs  hand_face  +7.300   差  7.300  分离比  3.65
+     ✅ size            normal  +1.200  vs  hand_face  +0.959   差  0.240  分离比  6.01
+     ✅ wrist_rise      normal  +0.266  vs  hand_face  +0.532   差  0.266  分离比  2.66
+     ✅ wrist_near      normal  +1.235  vs  hand_face  +0.714   差  0.521  分离比  3.47
+        wrist_face      有一组缺测，不参与可分性评估
+
+   ✅ 可判：靠「抬手量」(分离比 2.66) 能把这个姿势和正常分开

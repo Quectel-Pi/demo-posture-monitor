@@ -1,0 +1,1 @@
+{"frames": 31, "valid_frames": 31, "states": ["HEAD_TILT", "NORMAL"], "mean_fps": 8.91, "mean_latency_ms": 18.1, "rule_hold_s": {"shoulder_tilt": 0.5, "head_down": 0.5, "head_tilt": 0.5, "too_close": 0.5, "hand_on_face": 0.5}, "has_baseline": true}

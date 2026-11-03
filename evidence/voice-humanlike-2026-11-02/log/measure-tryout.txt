@@ -1,0 +1,9 @@
+A-xiaoxiao-warm.wav           2.74s  24000Hz 1ch 16b peak= 89.0% rms= 20.5% clip= 0 F0= 244.9 std= 52.7 cv=20.7% rng= 9.1st jit=1.5% cen=   526Hz hf= 0.2% sil=33.1%
+B-xiaoyi-lively.wav           2.49s  24000Hz 1ch 16b peak= 89.0% rms= 20.0% clip= 0 F0= 307.7 std= 60.6 cv=20.0% rng= 9.3st jit=1.7% cen=   625Hz hf= 0.7% sil=28.8%
+C-xiaoxuan-azure.wav          2.56s  24000Hz 1ch 16b peak= 89.0% rms= 19.7% clip= 0 F0= 311.7 std= 62.4 cv=20.6% rng= 9.8st jit=1.7% cen=   631Hz hf= 0.7% sil=29.2%
+D-xiaobei-liaoning.wav        2.91s  24000Hz 1ch 16b peak= 89.0% rms= 18.7% clip= 0 F0= 226.4 std= 51.6 cv=21.5% rng= 8.7st jit=1.2% cen=   607Hz hf= 0.2% sil=34.6%
+E-xiaoni-shaanxi.wav          2.77s  24000Hz 1ch 16b peak= 89.0% rms= 19.1% clip= 0 F0= 208.7 std= 63.5 cv=28.6% rng=12.3st jit=1.8% cen=   598Hz hf= 0.2% sil=29.9%
+F-hsiaoyu-tw.wav              3.18s  24000Hz 1ch 16b peak= 89.0% rms= 19.3% clip= 0 F0= 186.0 std= 47.1 cv=24.9% rng= 6.3st jit=1.3% cen=   774Hz hf= 0.1% sil=17.0%
+G-hsiaochen-tw.wav            2.86s  24000Hz 1ch 16b peak= 88.1% rms= 20.7% clip= 0 F0= 203.4 std= 37.5 cv=18.5% rng= 6.4st jit=1.4% cen=   553Hz hf= 0.2% sil=26.1%
+
+→ raw/tryout.json

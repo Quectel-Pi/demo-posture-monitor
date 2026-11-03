@@ -1,0 +1,6 @@
+[ui] 等待后台服务 /run/posture-guard/status.sock，界面将自动重连
+MESA: error: ZINK: vkCreateInstance failed (VK_ERROR_INCOMPATIBLE_DRIVER)
+
+(python3:2130347): Gtk-CRITICAL **: 13:42:35.397: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
+[2026-11-03 13:42:36] [voice] 开始播放 head_down
+[2026-11-03 13:42:39] [voice] 播放完成 head_down

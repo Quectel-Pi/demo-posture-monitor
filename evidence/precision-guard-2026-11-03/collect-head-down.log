@@ -1,0 +1,25 @@
+== 采集「低头/趴桌」 15 秒 ==
+   要领：下巴朝胸口明显低头（像看键盘/手机），保持不动
+
+   请摆好姿势… 5      请摆好姿势… 4      请摆好姿势… 3      请摆好姿势… 2      请摆好姿势… 1      采集中（15 秒），保持别动…          
+
+   有效样本 66/70 帧，已存 /var/lib/posture-guard/posture-samples-current/head_down.json
+   各特征中位数：
+     head_drop      (头低量)  中位   +0.446   范围 [ +0.406,  +0.502]
+     ear_tilt       (耳线歪)  中位   +3.576   范围 [ +0.176, +10.376]
+     shoulder_tilt  (肩线歪)  中位   +1.700   范围 [ +0.000,  +4.000]
+     size           (靠近倍数)  中位   +1.165   范围 [ +1.117,  +1.167]
+     wrist_rise     (抬手量)  中位   +0.226   范围 [ +0.088,  +0.270]
+     wrist_near     (手离鼻)  中位   +0.803   范围 [ +0.735,  +0.926]
+     wrist_face     (手离耳)  中位   +1.007   范围 [ +0.955,  +1.121]
+
+   == 和「正常」的可分性 ==
+     ✅ head_drop       normal  +0.089  vs  head_down  +0.446   差  0.357  分离比 24.62
+        ear_tilt        normal  +3.576  vs  head_down  +3.576   差  0.000  分离比  0.00
+     ✅ shoulder_tilt   normal  +0.000  vs  head_down  +1.700   差  1.700  分离比  2.96
+     ✅ size            normal  +1.200  vs  head_down  +1.165   差  0.035  分离比 35360678.93
+     ✅ wrist_rise      normal  +0.266  vs  head_down  +0.226   差  0.040  分离比  2.00
+     ✅ wrist_near      normal  +1.235  vs  head_down  +0.803   差  0.432  分离比 32.00
+     ✅ wrist_face      normal  +3.000  vs  head_down  +1.007   差  1.993  分离比 318.80
+
+   ✅ 可判：靠「手离耳」(分离比 318.80) 能把这个姿势和正常分开

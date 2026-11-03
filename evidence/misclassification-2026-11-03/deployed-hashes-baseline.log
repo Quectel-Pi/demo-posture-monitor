@@ -1,0 +1,3 @@
+a8e7d1fa5ecc0061c132aa781df83a7144d08d32f224d0059af0cd07c520ab7d  /userdata/build-src/build/posture_guard
+a8e7d1fa5ecc0061c132aa781df83a7144d08d32f224d0059af0cd07c520ab7d  /opt/posture-guard/bin/posture_guard
+{"valid":true,"ear_angle_valid":true,"ear_angle_deg":-3.576,"wrist_valid":true,"wrist_y_rel":0.835,"ear_mid_valid":true,"ear_mid_offset_y":-0.618,"shoulder_angle_deg":0.000,"head_offset_x":0.0176,"head_offset_y":-0.4997,"head_axis_deg":2.021,"width_ratio":0.4242,"samples":126,"frame_width":640,"frame_height":480,"camera_id":"/dev/v4l/by-id/usb-UGREEN_Camera_1080P_UGREEN_Camera_1080P_SN0001-video-index0","model_sha256":"5c25db4f6ac4fb99e289ee740bced7d2bc4d408584acc1e88c03c9f3d0793a89","created_at":"2026-11-03T13:20:46.747"}

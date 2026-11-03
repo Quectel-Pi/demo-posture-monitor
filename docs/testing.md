@@ -23,21 +23,27 @@ python3 tests/compare_onnx.py samples/bus.jpg bus_cpp.json
 
 ## 1. 单元测试（无需摄像头 / NPU）
 
-`ctest --test-dir build`，3 个可执行文件：
+`ctest --test-dir build`，**6 个可执行文件**：
 
 | 测试 | 覆盖内容 |
 |---|---|
-| `test_posture_rules` | 肩线角度 180° 周期折叠；`HoldRule` 迟滞（TC-05 瞬间倾斜不报警 / TC-06 恢复迟滞 / 激活后不重复 just_activated）；缺失关键点 → 无效；取景门（头贴顶、肩贴边）；ROI 外框排除；同一人重复框合并；真两人 → ambiguous；无基准时不触发高低肩/低头 |
-| `test_session_timer` | 在座确认 2s；20 分钟只触发一次（TC-08）；离开 10s 结束会话（TC-09）；暂停不计时；同类提醒 60s 冷却、多条规则合并、免打扰 15 分钟 |
-| `test_config` | YAML 子集解析（嵌套、行内数组、引号内 `#`、缺省值）；真实 `posture.yaml` 每个键都读对；`privacy.save_raw_video=true` 必须拒绝启动 |
+| `test_posture_rules` | 肩线角度 180° 周期折叠；`HoldRule` 迟滞（TC-05 瞬间倾斜不报警 / TC-06 恢复迟滞 / 激活后不重复 just_activated）；缺失关键点 → 无效；取景门（头贴顶、肩贴边）；ROI 外框排除；同一人重复框合并；真两人 → ambiguous；无基准时不触发高低肩/低头；**时间窗投票（确认速度 / 抗单帧噪声 / 挡瞬时毛刺）**；**托腮哨兵一致性**（`wrist_valid` 与 `wrist_to_nose_raw` 必须同步）；**托腮手离开脸后必须退出**（且测不到时必须放行）|
+| `test_session_timer` | 在座确认 2s；20 分钟只触发一次（TC-08）；离开 10s 结束会话（TC-09）；暂停不计时；同类提醒 60s 冷却、多条规则合并、免打扰 15 分钟；**噪声不拖慢播报**；**真换姿势必须重新计时** |
+| `test_config` | YAML 子集解析（嵌套、行内数组、引号内 `#`、缺省值）；真实 `posture.yaml` 每个键都读对；`privacy.save_raw_video=true` 必须拒绝启动；**播报门限在 0.3~1.5s 区间** |
+| `test_profile_hysteresis` | 画像级联迟滞（进入用原阈值 / 退出需退回 release_band / ratio=0 可关闭 / 释放带被跨度夹住）；guard 互斥在迟滞路径同样生效；**托腮要看手到脸的距离**（不能只看手抬起来了）|
+| `test_command_parse` | UI socket 命令解析；**JSON 冒号后带空格的容错**（曾因只找 `"cmd":"` 导致命令静默丢弃）|
+| `test_rknn_decode` | RKNN 输出解码（DFL / NMS / 关键点反量化）|
 
 结果：
 
 ```
-1/3 Test #1: posture_rules .... Passed
-2/3 Test #2: session_timer .... Passed
-3/3 Test #3: config ........... Passed
-100% tests passed, 0 tests failed out of 3
+1/6 Test #1: posture_rules ....... Passed
+2/6 Test #2: session_timer ....... Passed
+3/6 Test #3: config .............. Passed
+4/6 Test #4: profile_hysteresis .. Passed
+5/6 Test #5: command_parse ....... Passed
+6/6 Test #6: rknn_decode ........ Passed
+100% tests passed, 0 tests failed out of 6
 ```
 
 ## 2. M2 验收：静态图 vs ONNX fp32 参考
@@ -68,10 +74,10 @@ python3 tests/compare_onnx.py samples/bus.jpg bus_cpp.json
 
 | 指标 | 实测值 | 目标 |
 |---|---|---|
-| NPU 单帧推理 | **17.4 ms**（区间 15–25ms） | < 200ms |
-| 推理帧率 | 6.9 fps（受 `infer_fps: 8` 限制） | 5–10 fps |
-| 采集分辨率/格式 | 640×480 YUYV（这台 UVC 不提供 MJPG） | 640×480 / 15–30fps |
-| 进程内存 | `MemoryMax=1500M` 限制，实测常驻 < 200MB | — |
+| NPU 单帧推理 | **16.7–17.4 ms**（区间 15–25ms） | < 200ms |
+| 推理帧率 | **24.7–25.7 fps**（真实服务 + UI 同时运行） | 20–30 fps |
+| 采集分辨率/格式 | 640×480（支持 MJPG 的 UVC 会走 MJPG） | 640×480 / 15–30fps |
+| 进程内存 | `MemoryMax=1500M` 限制，实测常驻 ~51MB | — |
 
 对照：同一模型在本机用 ONNX Runtime CPU 跑是 **331–401 ms/帧**（6~8 线程），
 NPU 快 16–19 倍。
@@ -156,8 +162,8 @@ adb shell '/opt/posture-guard/bin/posture_guard --config /etc/posture-guard/post
   [PASS] 状态 socket          /run/posture-guard/status.sock
   [PASS] 状态可读             UNKNOWN 无法判定
   [PASS] 推理后端             rknn(NPU)
-  [PASS] 推理耗时             17.4 ms/帧（NPU，目标 <200ms）
-  [PASS] 推理帧率             6.9 fps（配置上限 camera.infer_fps）
+  [PASS] 推理耗时             16.7 ms/帧（NPU，目标 <200ms）
+  [PASS] 推理帧率             25.7 fps（配置上限 camera.infer_fps）
   [PASS] 视频流               3 秒内收到 3 帧 640x480 JPEG（界面能看到画面）
   [PASS] 出帧中               frame_id 311 -> 345
   [PASS] 统计落盘             stats-2026-10-28.jsonl (115 行)

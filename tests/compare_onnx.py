@@ -95,6 +95,24 @@ def iou(a, b):
     return inter / union if union > 0 else 0.0
 
 
+def match_people(ref_boxes, people, threshold=0.3):
+    pairs = []
+    for pi, person in enumerate(people):
+        x, y, w, h = person["box"]
+        box = [x+w/2, y+h/2, w, h]
+        for ri, reference in enumerate(ref_boxes):
+            overlap = iou(box, reference)
+            if overlap >= threshold:
+                pairs.append((overlap, pi, ri))
+    used_people, used_references, matches = set(), set(), []
+    for overlap, pi, ri in sorted(pairs, reverse=True):
+        if pi in used_people or ri in used_references:
+            continue
+        used_people.add(pi); used_references.add(ri)
+        matches.append((pi, ri, overlap))
+    return matches
+
+
 def main() -> int:
     if len(sys.argv) < 3:
         print(__doc__)
@@ -116,25 +134,17 @@ def main() -> int:
           f"（RKNN runtime {cpp.get('runtime','?')}）")
 
     errs = []
-    matched = 0
-    for p in people:
-        bx = p["box"]
-        # C++ 输出的是左上角 + 宽高，统一成 (cx, cy, w, h) 再算 IoU
-        box = [bx[0] + bx[2] / 2.0, bx[1] + bx[3] / 2.0, bx[2], bx[3]]
-        best_i, best_iou = -1, 0.0
-        for i, rb in enumerate(ref_boxes):
-            v = iou(box, rb)
-            if v > best_iou:
-                best_i, best_iou = i, v
-        if best_iou < 0.3:
-            continue
-        matched += 1
+    matches = match_people(ref_boxes, people)
+    matched = len(matches)
+    for pi, best_i, best_iou in matches:
+        p = people[pi]
         kp = np.array([[k["x"], k["y"]] for k in p["keypoints"]])
         ref = ref_kpts[best_i][:, :2]
         d = np.linalg.norm(kp - ref, axis=1)
         errs.append(d)
-        print(f"  匹配 IoU={best_iou:.3f} score={p['score']:.3f}  "
+        print(f"  唯一匹配 IoU={best_iou:.3f} score={p['score']:.3f}  "
               f"平均误差 {d.mean():.1f}px  最大 {d.max():.1f}px")
+    print(f"  未匹配NPU框 {len(people)-matched}，未匹配参考人体 {len(ref_boxes)-matched}")
 
     if not errs:
         print("!! 没有任何人体匹配成功（IoU<0.3），解码多半有问题")

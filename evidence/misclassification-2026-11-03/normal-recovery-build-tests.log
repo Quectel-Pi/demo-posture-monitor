@@ -1,0 +1,42 @@
+[  6%] Built target test_command_parse
+[ 10%] Building CXX object CMakeFiles/posture_core.dir/src/PostureAnalyzer.cpp.o
+[ 13%] Building CXX object CMakeFiles/posture_core.dir/src/PostureProfile.cpp.o
+[ 17%] Linking CXX static library libposture_core.a
+[ 55%] Built target posture_core
+[ 62%] Building CXX object CMakeFiles/test_posture_rules.dir/tests/test_posture_rules.cpp.o
+[ 62%] Linking CXX executable test_config
+[ 65%] Linking CXX executable test_session_timer
+[ 68%] Building CXX object CMakeFiles/posture_guard.dir/src/main.cpp.o
+[ 72%] Built target test_config
+[ 75%] Built target test_session_timer
+[ 79%] Building CXX object CMakeFiles/test_profile_hysteresis.dir/tests/test_profile_hysteresis.cpp.o
+[ 82%] Linking CXX executable test_rknn_decode
+[ 86%] Built target test_rknn_decode
+/userdata/build-src/tests/test_profile_hysteresis.cpp: In function ‘void {anonymous}::TestNoActiveEqualsPlain()’:
+/userdata/build-src/tests/test_profile_hysteresis.cpp:140:16: warning: unused variable ‘kR’ [-Wunused-variable]
+  140 |   const double kR = 0.5;
+      |                ^~
+[ 89%] Linking CXX executable test_profile_hysteresis
+[ 89%] Built target test_profile_hysteresis
+[ 93%] Linking CXX executable test_posture_rules
+[ 93%] Built target test_posture_rules
+[ 96%] Linking CXX executable posture_guard
+[100%] Built target posture_guard
+Internal ctest changing into directory: /userdata/build-src/build
+Test project /userdata/build-src/build
+    Start 1: posture_rules
+1/6 Test #1: posture_rules ....................   Passed    0.01 sec
+    Start 2: session_timer
+2/6 Test #2: session_timer ....................   Passed    0.01 sec
+    Start 3: config
+3/6 Test #3: config ...........................   Passed    0.01 sec
+    Start 4: profile_hysteresis
+4/6 Test #4: profile_hysteresis ...............   Passed    0.01 sec
+    Start 5: command_parse
+5/6 Test #5: command_parse ....................   Passed    0.00 sec
+    Start 6: rknn_decode
+6/6 Test #6: rknn_decode ......................   Passed    0.02 sec
+
+100% tests passed, 0 tests failed out of 6
+
+Total Test time (real) =   0.08 sec

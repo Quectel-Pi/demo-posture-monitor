@@ -13,10 +13,12 @@
 // 六个特征等权必然互相串。改成「每个姿势只用它自己那一个最可靠的特征，
 // 按物理优先级依次试，第一个命中的就是结论」：
 //
-//   优先级 1  ear_tilt   歪头     —— 耳线角度和你离屏幕多远无关，最干净
-//   优先级 2  head_drop  低头     —— 必须在歪头之后，因为歪头也会压低耳中点
-//   优先级 3  size       凑近     —— 必须在托腮之前，因为前倾时手一定靠脸
-//   优先级 4  wrist_near 托腮     —— 手到鼻子的距离，托腮独有
+//   当前生成顺序（实际以画像文件为准）：
+//   1 size          过近 —— 前倾也会抬手，因此先判距离
+//   2 wrist_rise    托腮 —— 运行时还验证手与脸的几何关系
+//   3 ear_tilt      歪头 —— 托腮本身也可能使耳线倾斜
+//   4 head_drop     低头 —— 歪头会压低一侧耳朵，须后判
+//   5 shoulder_tilt 高低肩
 //
 // 每个规则只用 1 个特征 + 1 个阈值，阈值取「normal 中位数」与「该姿势中位数」
 // 的中点。全部由采集数据自动算出，不是手调的。
@@ -44,9 +46,11 @@
 
 namespace posture {
 
+struct Baseline;
+
 class PostureProfile {
  public:
-  static constexpr int kNumFeatures = 6;
+  static constexpr int kNumFeatures = 7;
 
   using FeatureVec = std::array<double, kNumFeatures>;
 
@@ -55,6 +59,9 @@ class PostureProfile {
     int samples = 0;
     FeatureVec median{};                      // 每个特征的样本中位数
     FeatureVec mad{};                         // 每个特征的中位绝对偏差（稳健离散度）
+    // Missing wrist-distance sentinels are skipped. Stable zero-MAD values
+    // remain valid and use the feature floor as their minimum spread.
+    std::array<std::uint8_t, kNumFeatures> mad_missing{};
   };
 
   // 一条判定规则：某姿势用「某一个特征」过阈值来识别
@@ -71,6 +78,13 @@ class PostureProfile {
     // 于是「歪头」会被「低头」抢走。耳线已经明显歪了就不该再判低头。
     int guard_feature = -1;
     double guard_max = 0.0;
+    // 第二条门控（双向）：guard2_feature >= 0 时，只允许
+    // «特征 <= guard2_max»（若 guard2_direction<0）或者 «>= guard2_max»（>0）。
+    // 用途：托腮除了「手抬起来了」(wrist_rise) 还要「手在脸旁边」，
+    // 也就是手腕要在鼻子下方 —— 手举过头出现在眼睛以上就不是托腮。
+    int guard2_feature = -1;
+    int guard2_direction = -1;   // -1 = 需 <= guard2_max；+1 = 需 >= guard2_max
+    double guard2_max = 0.0;
   };
 
   static const char* FeatureName(int i);
@@ -80,6 +94,11 @@ class PostureProfile {
   // ---- 文件读写（行式文本，见本文件顶部说明）----
   bool Load(const std::string& path, std::string* err);
   bool Save(const std::string& path, std::string* err) const;
+
+  // Bind features and thresholds to the exact calibration used for sampling.
+  static std::string BaselineId(const Baseline& baseline);
+  void BindBaseline(const Baseline& baseline);
+  bool MatchesBaseline(const Baseline& baseline, std::string* why = nullptr) const;
 
   bool empty() const { return classes_.empty(); }
   bool Has(const std::string& label) const;
@@ -108,9 +127,30 @@ class PostureProfile {
     std::string matched_rule;   // 例如 "ear_tilt >= 16.45"
     std::vector<std::pair<std::string, double>> all;  // 未命中的各规则距离（升序）
   };
-  // accept_radius 已不再决定是否命中（规则命中与否由阈值决定），
-  // 仅用于兼容旧调用；保留参数。
-  Verdict Classify(const FeatureVec& f, double accept_radius) const;
+  // Rules use their own thresholds; accept_radius limits distance to NORMAL.
+  // A nonpositive radius uses the default of 3 robust scales.
+  Verdict Classify(const FeatureVec& f, double accept_radius,
+                   const std::string& excluded_label = "") const;
+
+  // 带迟滞的判定：给「当前已采纳的标签」留一段释放带，避免在阈值附近反复抖动。
+  //
+  // 为什么必须要有：Classify 是纯阈值判定，特征在阈值附近每帧微动就会在两个
+  // 标签之间来回跳。实测板端 6 小时内出现 488 次「画像判定切换」，其中大量是
+  // 「正常 -> 低头/趴桌 -> 正常」在 1~2 秒内来回跳 —— 界面上表现为姿态指示
+  // 闪烁、语音反复播报，用户感受就是「检测不准、很吵」。
+  //
+  // 迟滞的做法和传统规则路径（PostureAnalyzer::Rule 的 trigger/recover）一致：
+  //   · 进入某标签：仍按原阈值（trigger）判定，不改变灵敏度
+  //   · 离开当前标签：要把该特征退回 trigger - release_band 才算真的离开
+  // 这样只增加「退出」的惰性，不牺牲「进入」的及时性。
+  //
+  // release_band 由 min(visual_scale, hold_band) 决定，避免对本来就很宽的
+  // 特征（如 size 的 0.5 尺度）套上过大的死区把真变化吃掉。
+  //   release_ratio = 0 时完全退化成纯 Classify（便于对照实验）。
+  Verdict ClassifyHysteretic(const FeatureVec& f, const std::string& active_label,
+                             double release_ratio,
+                             const std::string& excluded_label = "",
+                             double normal_radius = 3.0) const;
 
   // 分离度诊断：某特征在各类中位数之间的最大差 / 类内离散度。
   // 值 < 1 说明该特征区分不开这些姿势（数据本身不可分，调阈值无用）。
@@ -125,6 +165,18 @@ class PostureProfile {
   int total_samples() const;
 
  private:
+  Verdict NormalVerdict(const FeatureVec& f, double radius,
+                        const std::string& excluded_label) const;
+  std::string baseline_id_;
+  double RuleReleaseBand(const Rule& r, double release_ratio) const;
+  static bool GuardsPass(const Rule& r, const FeatureVec& f);
+
+  // DefaultFloors() 相对【物理实际变化幅度】是偏小的：size 的 floor 是 0.04，
+  // 意味着「靠近 4%」就算有意义 —— 但 4% 的靠近在画面里几乎看不出来，
+  // 却足以让 two 侧样本在阈值附近来回跨过。所以迟滞带用一个更大的基准量
+  // （kReleaseScale，约等于人眼能分辨的幅度），再由实验取值决定比例。
+  static FeatureVec ReleaseScale();
+
   std::vector<ClassStat> classes_;
   std::vector<Rule> rules_;
   FeatureVec scales_ = DefaultFloors();

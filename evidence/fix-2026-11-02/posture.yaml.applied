@@ -1,0 +1,151 @@
+# RK3576 坐姿检测与护眼提醒 —— 运行配置
+#
+# 依据：《RK3576 坐姿检测与护眼提醒_完整实施方案》§12
+# 注意：下面所有阈值都是「工程初始值」，不是人体工学规范。
+#       换机位 / 换人 / 换摄像头后必须重新校准（docs/calibration.md）。
+version: 1
+
+camera:
+  npu_core_mask: "0_1"
+  # 板端 UVC 节点不一定是 video0：用 scripts/smoke_camera.sh 查实际节点，
+  # 优先写 /dev/v4l/by-id/... 稳定路径（热插拔后不换号）
+  # 优先用 /dev/v4l/by-id/... 稳定路径：热插拔后 videoN 会换号，by-id 不会
+  # 换摄像头后这里要跟着改（bash scripts/focus.sh --info 可查当前节点）
+  device: "/dev/v4l/by-id/usb-UGREEN_Camera_1080P_UGREEN_Camera_1080P_SN0001-video-index0"
+  width: 640
+  height: 480
+  capture_fps: 30
+  infer_fps: 25
+  # auto = 用设备实际支持的最好格式（有 MJPG 就用 MJPG 省 USB 带宽，否则用设备给的第一个）
+  # 也可以写死 "MJPG" / "YUYV" 强制某一种（不支持时会自动回退并打 WARN）
+  preferred_pixel_format: "auto"
+  # ---- 电动对焦锁定 ----
+  # 连续自动对焦会让镜头每帧微调 → 画面持续轻微失焦（实测清晰度只有锁死时的 1/8）。
+  # 固定工位必须关掉，锁一个实测值。用 bash scripts/focus.sh --scan 现场测。
+  # focus_absolute 取值依设备而定；本机（UGREEN 1080P，人距 40cm）：
+  #   20~120 都清晰，160 明显变糊，250 以上全糊 → 取区间中间 70。
+  focus_autofocus: false
+  focus_absolute: 70
+
+  # 曝光：-1 = 保持设备自动曝光。若现场有强烈逆光/频闪，可改成手动固定值（微秒）
+  exposure_time_absolute: -1
+
+  reconnect_backoff_s: 1.0
+  reconnect_backoff_max_s: 15.0
+
+models:
+  pose: "/opt/posture-guard/models/yolov8n-pose.rknn"
+  pose_confidence: 0.45
+  joint_confidence: 0.45
+  nms_iou: 0.45
+
+user:
+  roi: [0.10, 0.05, 0.80, 0.90]      # 归一化 x,y,w,h：主用户必须在框内
+  calibration_duration_s: 5
+  baseline_file: "/var/lib/posture-guard/baseline.json"
+  calibrate_on_start: false          # true = 每次启动都重新校准
+
+posture:
+  # 界面快速反馈，语音由 notification.posture_hold_s 单独防抖。
+  profile_hold_s: 0.5
+  profile_hold_hand_face_s: 2.5
+  profile_hold_too_close_s: 1.0
+  profile_hold_head_down_s: 1.5
+  profile_hold_head_tilt_s: 1.5
+  # 画像级联的迟滞比例（相对 ReleaseScale）；0 = 关闭迟滞。
+  #
+  # 为什么需要：画像级联是纯阈值判定，特征在阈值附近每帧微动就会在两个标签
+  # 之间来回跳。实测板端生产机 1.7 小时内发生 514 次「画像判定切换」
+  # （307 次/小时）—— 界面姿态指示闪烁、语音反复播报，用户感受就是“不准、吵”。
+  #
+  # 迟滞只给「退出」加惰性：进入仍用原阈值（不降低灵敏度），
+  # 离开必须退回 trigger - release_band 才算真的离开。
+  # 用生产 journal 的 514 条切换反向验证：比例 0.5 可拦下 287 次「离开」中的
+  # 105 次（37%），其中低头/趴桌 42%、歪头 20%，均为“特征还没真的退回去就判离开”的假切换。
+  # 验证脚本：scripts/verify_hysteresis_journal.py
+  profile_release_ratio: 0.5
+  # ---- 高低肩（§4.2，V1 核心规则）----
+  shoulder_trigger_deg: 12
+  shoulder_recover_deg: 8
+  shoulder_hold_s: 0.5
+  recovery_hold_s: 0.35
+  missing_data_timeout_s: 1.5
+
+  # ---- 以下三项是「单目近似量」，不是真实角度（§4.3/§4.4/§4.5）----
+  # 鼻子离肩线的最小距离（占肩宽）。只挡「关键点错检」，不挡正常低头。
+  # 摄像头装在显示器上方俯拍时，这个量天然偏小，别调大。
+  min_head_gap: 0.08
+  # ---- 取景硬门 ----
+  # 超出这些范围就判「机位不对」并给出具体提示，而不是硬猜姿态。
+  # 实测人太近时：人体框顶边超出画面上沿 30%、占画面高 98%、耳线角恒为 0（歪头测不到）。
+  # 只有两条真硬约束：头顶不能被裁（耳朵会掉出画面）、双肩不能被裁
+  frame_max_top_over: 0.03        # 头顶最多允许超出画面上沿 3%
+  frame_max_person_w: 0.90        # 人最多占画面宽 90%（再宽双肩就被裁了）
+  # 不限制「占画面高」：桌面机位只拍头+肩时框自然撑满高度，这是正常的
+  frame_max_person_h: 1.50
+  # 低头阈值：相对「基准头肩距离」的比例（不是固定绝对值）。
+  # 直视机位基准约 -0.9 肩宽 → 阈值 0.45；显示器上方俯拍基准只有 -0.20 → 阈值 0.11。
+  # 用固定 0.35 在俯视机位下永远达不到（俯视下最多只能降 0.20），低头会完全失效。
+  # 实测：明显低头时耳中点比基准降 26%，所以取 0.25（0.55 永远达不到）
+  head_down_drop_ratio: 0.25
+  # 基准漂移阈值：肩宽占比差这么多倍就判基准失效 → 自动重校准。
+  # 收紧到 1.45 是因为全部姿势特征都是「相对基准」的量，人一退椅子就整体失配
+  #（实测校准 0.459、后来 0.305，差 1.5 倍，size 变 0.66，所有姿势判不出来）。
+  baseline_drift_ratio: 1.45
+  baseline_drift_head_dy: 0.38
+  head_down_drop_min: 0.10
+  head_down_drop_max: 0.35            # 阈值上限（直视机位基准大时才用得到）
+  head_down_hold_s: 0.5
+  head_tilt_deg: 18                  # 左右耳连线相对基准的偏角（不是头轴，头轴俯视下不稳）
+  head_tilt_hold_s: 0.5
+  # 离屏过近：用「相对校准基准的倍数」，不要用绝对值。
+  # 绝对值在不同摄像头 FOV 下完全不可比：
+  #   icSpring 机位坐近 ≈ 0.78；UGREEN 俯视机位正常距离就已经 0.42
+  # 1.35 = 比校准时近了 1/1.35 ≈ 26%（40cm → 30cm）
+  # 离屏过近：判「比校准时的取景近了多少」，不是测距（本机无 ToF）。
+  # 1.35 = 比校准基准的肩宽占比大 35%
+  too_close_ratio_rel: 1.35
+  too_close_ratio: 0.75              # 绝对值兜底（没有校准基准时才用）
+  too_close_hold_s: 0.5
+  # 托腮：手腕要比「校准时的手腕高度」抬高多少肩宽才算抬起手来。
+  # 不能用「手腕高于肩线」—— 俯拍下下巴/手腕投影都在肩线以下。
+  hand_face_wrist_rise: 0.20
+  hand_face_below_ear_min: 0.0
+  hand_face_wrist_face_max: 0.95
+  hand_face_ratio: 0.95              # 抬起来之后，手腕-鼻子距离 / 肩宽 < 该值 = 托腮
+  # 人体尺寸门：肩宽占比低于「校准基准 × 该值」就不认作主用户。
+  # 挡「人走后椅子被当成人」（实测假阳性宽占比 0.12 vs 正常 0.35）。
+  min_size_ratio: 0.55
+  hand_face_hold_s: 0.5
+
+eye_care:
+  continuous_use_s: 1200             # 20 分钟（20-20-20 规则）
+  far_look_s: 20
+  presence_confirm_s: 2
+  absent_confirm_s: 10
+  reminder_policy: "manual_ack_or_session_reset"   # 或 auto_restart
+
+ui:
+  # 界面上显示摄像头实时画面。关掉后界面只剩骨架（更隐私，但没法调机位）
+  stream_video: true
+  video_width: 640        # 下采样宽度，0 = 原始宽度
+  video_fps: 10           # 视频流帧率（与推理帧率无关）
+  jpeg_quality: 70
+
+notification:
+  posture_hold_s: 2.0       # 姿势状态稳定后再播报；与界面识别速度分开
+  cooldown_s: 60
+  headless_log: true
+  desktop_popup: false
+  voice: true
+
+privacy:
+  save_raw_video: false              # 硬性要求：true 会拒绝启动
+  save_face_images: false            # 同上
+  log_keypoints: false
+  retain_statistics_days: 30
+
+runtime:
+  status_socket: "/run/posture-guard/status.sock"
+  state_dir: "/var/lib/posture-guard"
+  stats_dir: "/var/lib/posture-guard/stats"

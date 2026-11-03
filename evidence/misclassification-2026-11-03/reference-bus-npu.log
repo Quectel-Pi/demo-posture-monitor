@@ -1,0 +1,170 @@
+2026-11-03T13:48:44.424 [INFO ] posture_guard 1.0.0 启动，配置 /etc/posture-guard/posture.yaml
+2026-11-03T13:48:44.424 [INFO ] 生效配置:
+camera=/dev/v4l/by-id/usb-UGREEN_Camera_1080P_UGREEN_Camera_1080P_SN0001-video-index0 640x480@30fps infer=25fps fmt=auto
+focus: autofocus=off absolute=70 exposure=-1
+model=/opt/posture-guard/models/yolov8n-pose.rknn pose_conf=0.45 joint_conf=0.45
+roi=0.1,0.05,0.8,0.9
+baseline=/var/lib/posture-guard/baseline.json calibration=5s
+shoulder: trigger=12deg recover=8deg hold=0.5s rec_hold=0.35s missing_timeout=1.5s
+approx: head_down_drop_ratio=0.25 (min 0.1 max 0.35) head_tilt_deg=18 too_close_rel=1.35 (abs 0.75) hand_face_ratio=0.95
+eye_care: use=1200s far_look=20s presence=2s absent=10s policy=manual_ack_or_session_reset
+notify: posture_frames=10 legacy_hold=0.5s voice=on cooldown=60s log=on popup=off
+ui_video: stream=on w=640 fps=10 q=70
+runtime: socket=/run/posture-guard/status.sock state=/var/lib/posture-guard stats=/var/lib/posture-guard/stats
+
+2026-11-03T13:48:44.590 [INFO ] NPU 核掩码 0_1 已生效
+2026-11-03T13:48:44.590 [INFO ] 输出 0 shape=1x65x80x80x attr.size=416000 n_elems=416000 type=2
+2026-11-03T13:48:44.590 [INFO ] 输出 1 shape=1x65x40x40x attr.size=104000 n_elems=104000 type=2
+2026-11-03T13:48:44.590 [INFO ] 输出 2 shape=1x65x20x20x attr.size=26000 n_elems=26000 type=2
+2026-11-03T13:48:44.590 [INFO ] 输出 3 shape=1x17x3x8400x attr.size=428400 n_elems=428400 type=2
+2026-11-03T13:48:44.594 [INFO ] 输出张量 int8 就地反量化（zp/scale 取自 OUTPUT_ATTR）
+2026-11-03T13:48:44.594 [INFO ] RKNN 引擎就绪: /opt/posture-guard/models/yolov8n-pose.rknn 输入 640x640 输出 4 个 tensor, runtime 2.3.2 (429f97ae6b@2025-04-09T09:09:27) / drv 0.9.8
+2026-11-03T13:48:44.594 [INFO ] 模型 SHA256 5c25db4f6ac4fb99e289ee740bced7d2bc4d408584acc1e88c03c9f3d0793a89
+2026-11-03T13:48:44.594 [WARN ] RKNN w8a8 模型的关键点 conf 通道被量化破坏（恒为 0），关键点可信度改用人物框置信度代理 —— 见 docs/troubleshooting.md §1
+2026-11-03T13:48:44.639 [INFO ] 图片 /tmp/posture-reference-samples/bus.jpg (810x1080) 检出 8 人
+person[0] score=0.889 box=(88.0,318.1,196.2,509.7)
+  nose          123.5   441.6
+  eye_l         123.5   441.6
+  eye_r         123.5   441.6
+  ear_l         139.7   441.6
+  ear_r          85.8   441.6
+  shoulder_l    139.7   511.7
+  shoulder_r     64.3   511.7
+  elbow_l       155.8   565.5
+  elbow_r        85.8   565.5
+  wrist_l       139.7   533.2
+  wrist_r       139.7   549.4
+  hip_l         139.7   640.9
+  hip_r          85.8   640.9
+  knee_l        155.8   748.6
+  knee_r         64.3   770.2
+  ankle_l       177.4   861.7
+  ankle_r        64.3   877.9
+person[1] score=0.872 box=(235.3,310.3,125.7,450.4)
+  nose          285.1   457.8
+  eye_l         285.1   441.6
+  eye_r         268.9   441.6
+  ear_l         306.6   457.8
+  ear_r         247.4   457.8
+  shoulder_l    306.6   511.7
+  shoulder_r    231.2   511.7
+  elbow_l       322.8   549.4
+  elbow_r       231.2   587.1
+  wrist_l       268.9   533.2
+  wrist_r       247.4   624.8
+  hip_l         285.1   624.8
+  hip_r         247.4   624.8
+  knee_l        285.1   716.3
+  knee_r        247.4   716.3
+  ankle_l       268.9   807.9
+  ankle_r       247.4   824.0
+person[2] score=0.853 box=(183.4,309.7,121.5,451.0)
+  nose          306.6   457.8
+  eye_l         306.6   441.6
+  eye_r         285.1   441.6
+  ear_l         306.6   457.8
+  ear_r         268.9   441.6
+  shoulder_l    322.8   511.7
+  shoulder_r    247.4   511.7
+  elbow_l       339.0   549.4
+  elbow_r       247.4   587.1
+  wrist_l       285.1   533.2
+  wrist_r       268.9   624.8
+  hip_l         306.6   624.8
+  hip_r         268.9   624.8
+  knee_l        306.6   716.3
+  knee_r        285.1   732.5
+  ankle_l       285.1   807.9
+  ankle_r       268.9   824.0
+person[3] score=0.853 box=(655.1,361.3,139.8,477.4)
+  nose          818.3   420.1
+  eye_l         818.3   420.1
+  eye_r         796.8   403.9
+  ear_l         818.3   420.1
+  ear_r         818.3   420.1
+  shoulder_l    818.3   495.5
+  shoulder_r    818.3   474.0
+  elbow_l       796.8   565.5
+  elbow_r       796.8   565.5
+  wrist_l       796.8   603.2
+  wrist_r       796.8   587.1
+  hip_l         796.8   640.9
+  hip_r         796.8   640.9
+  knee_l        764.4   732.5
+  knee_r        780.6   732.5
+  ankle_l       726.7   840.2
+  ankle_r       726.7   840.2
+person[4] score=0.853 box=(28.0,265.3,194.7,506.7)
+  nose          139.7   457.8
+  eye_l         139.7   441.6
+  eye_r         123.5   457.8
+  ear_l         139.7   457.8
+  ear_r         102.0   457.8
+  shoulder_l    155.8   511.7
+  shoulder_r     85.8   511.7
+  elbow_l       177.4   587.1
+  elbow_r       102.0   587.1
+  wrist_l       155.8   549.4
+  wrist_r       155.8   587.1
+  hip_l         155.8   657.1
+  hip_r          85.8   657.1
+  knee_l        177.4   770.2
+  knee_r         85.8   770.2
+  ankle_l       177.4   877.9
+  ankle_r        64.3   877.9
+person[5] score=0.832 box=(703.3,311.5,144.7,477.1)
+  nose          796.8   420.1
+  eye_l         796.8   420.1
+  eye_r         796.8   420.1
+  ear_l         796.8   441.6
+  ear_r         796.8   420.1
+  shoulder_l    818.3   495.5
+  shoulder_r    796.8   495.5
+  elbow_l       780.6   587.1
+  elbow_r       780.6   565.5
+  wrist_l       780.6   603.2
+  wrist_r       780.6   603.2
+  hip_l         796.8   657.1
+  hip_r         780.6   657.1
+  knee_l        764.4   748.6
+  knee_r        764.4   748.6
+  ankle_l       726.7   840.2
+  ankle_r       726.7   840.2
+person[6] score=0.754 box=(184.9,521.8,118.0,450.4)
+  nose          306.6   441.6
+  eye_l         306.6   420.1
+  eye_r         285.1   420.1
+  ear_l         306.6   420.1
+  ear_r         268.9   420.1
+  shoulder_l    322.8   474.0
+  shoulder_r    247.4   495.5
+  elbow_l       339.0   533.2
+  elbow_r       247.4   549.4
+  wrist_l       285.1   511.7
+  wrist_r       268.9   587.1
+  hip_l         306.6   603.2
+  hip_r         268.9   603.2
+  knee_l        306.6   716.3
+  knee_r        268.9   716.3
+  ankle_l       285.1   807.9
+  ankle_r       268.9   807.9
+person[7] score=0.690 box=(238.5,522.0,120.7,451.6)
+  nose          285.1   420.1
+  eye_l         285.1   420.1
+  eye_r         268.9   420.1
+  ear_l         306.6   420.1
+  ear_r         247.4   420.1
+  shoulder_l    322.8   474.0
+  shoulder_r    231.2   474.0
+  elbow_l       322.8   533.2
+  elbow_r       231.2   549.4
+  wrist_l       268.9   511.7
+  wrist_r       247.4   565.5
+  hip_l         306.6   603.2
+  hip_r         247.4   603.2
+  knee_l        285.1   694.8
+  knee_r        247.4   716.3
+  ankle_l       285.1   786.3
+  ankle_r       247.4   807.9
+2026-11-03T13:48:44.639 [INFO ] 关键点已写入 /tmp/reference-bus-npu.json
+2026-11-03T13:48:44.742 [INFO ] 已生成骨架图 posture_guard_out.png

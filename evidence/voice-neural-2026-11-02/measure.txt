@@ -1,0 +1,6 @@
+shoulder_tilt   2.08s 24000Hz mono16 peak= 89.0% rms= 20.1% F0= 296.3Hz
+head_down       2.35s 24000Hz mono16 peak= 89.0% rms= 19.8% F0= 230.8Hz
+head_tilt       2.45s 24000Hz mono16 peak= 89.0% rms= 20.2% F0= 259.5Hz
+too_close       2.99s 24000Hz mono16 peak= 79.4% rms= 19.8% F0= 244.9Hz
+hand_on_face    2.14s 24000Hz mono16 peak= 89.0% rms= 19.7% F0= 240.0Hz
+rest            5.85s 24000Hz mono16 peak= 89.0% rms= 21.0% F0= 244.9Hz

@@ -1,0 +1,5 @@
+已生成画像 /tmp/precision-candidate.txt（5 个姿势，347 个样本）
+
+生效方式：
+  systemctl restart posture-guard
+生效后 status 里 profile_active=True，判定改由画像分类给出。

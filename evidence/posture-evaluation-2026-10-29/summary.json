@@ -1,0 +1,263 @@
+{
+  "metadata": {
+    "protocol": "human-confirmed-v1",
+    "rounds": 2,
+    "capture_s": 8,
+    "settle_excluded_s": 1.0,
+    "configuration_modified": false,
+    "raw_video_saved": false,
+    "latency_note": "cue latency includes human motion; confirmation latency starts after subject says pose is ready; neither is independently video-annotated onset latency",
+    "config_sha256": "c8e2f3c68e91ae6c2bdf3cd395d62f8762e96aa5dd6f981660c822bacf03f756",
+    "baseline_sha256": "7d10f22c505c52404c826bfaca7a8616e8591d0f4b909b5381e98f6a1a631a03",
+    "baseline": {
+      "valid": true,
+      "ear_angle_valid": true,
+      "ear_angle_deg": 0.0,
+      "wrist_valid": true,
+      "wrist_y_rel": 0.367,
+      "ear_mid_valid": true,
+      "ear_mid_offset_y": -0.533,
+      "shoulder_angle_deg": 5.857,
+      "head_offset_x": -0.5686,
+      "head_offset_y": -0.4052,
+      "head_axis_deg": -54.413,
+      "width_ratio": 0.4819,
+      "samples": 24,
+      "frame_width": 640,
+      "frame_height": 480,
+      "camera_id": "/dev/v4l/by-id/usb-UGREEN_Camera_1080P_UGREEN_Camera_1080P_SN0001-video-index0",
+      "model_sha256": "5c25db4f6ac4fb99e289ee740bced7d2bc4d408584acc1e88c03c9f3d0793a89",
+      "created_at": "2026-10-29T14:35:29.287"
+    },
+    "binary_sha256": "13f961c0e00a343bfd029e985641e6d8fc0bb56cf500d7f6151521698436bcdb"
+  },
+  "complete": false,
+  "summary": {
+    "accepted_trials": 7,
+    "recorded_attempts": 9,
+    "by_pose": {
+      "normal": {
+        "trials": 2,
+        "status_frames": 61,
+        "correct": 45,
+        "recall": 0.7377049180327869,
+        "precision": 0.8653846153846154,
+        "stable_matches": 2,
+        "confirmation_response_median_s": 3.067,
+        "confusion": {
+          "normal": 45,
+          "shoulder_tilt": 16
+        }
+      },
+      "head_down": {
+        "trials": 1,
+        "status_frames": 31,
+        "correct": 31,
+        "recall": 1.0,
+        "precision": 0.7209302325581395,
+        "stable_matches": 1,
+        "confirmation_response_median_s": 0.674,
+        "confusion": {
+          "head_down": 31
+        }
+      },
+      "head_tilt": {
+        "trials": 1,
+        "status_frames": 31,
+        "correct": 0,
+        "recall": 0.0,
+        "precision": null,
+        "stable_matches": 0,
+        "confirmation_response_median_s": null,
+        "confusion": {
+          "head_down": 12,
+          "shoulder_tilt": 19
+        }
+      },
+      "shoulder_tilt": {
+        "trials": 1,
+        "status_frames": 31,
+        "correct": 24,
+        "recall": 0.7741935483870968,
+        "precision": 0.2553191489361702,
+        "stable_matches": 1,
+        "confirmation_response_median_s": 1.531,
+        "confusion": {
+          "shoulder_tilt": 24,
+          "normal": 7
+        }
+      },
+      "hand_on_face": {
+        "trials": 1,
+        "status_frames": 31,
+        "correct": 0,
+        "recall": 0.0,
+        "precision": 0.0,
+        "stable_matches": 0,
+        "confirmation_response_median_s": null,
+        "confusion": {
+          "shoulder_tilt": 31
+        }
+      },
+      "too_close": {
+        "trials": 1,
+        "status_frames": 30,
+        "correct": 0,
+        "recall": 0.0,
+        "precision": null,
+        "stable_matches": 0,
+        "confirmation_response_median_s": null,
+        "confusion": {
+          "shoulder_tilt": 4,
+          "hand_on_face": 26
+        }
+      }
+    },
+    "trials": [
+      {
+        "label": "normal",
+        "round": 1,
+        "human_confirmed": true,
+        "stream_interrupted": false,
+        "scored_status_frames": 31,
+        "correct": 31,
+        "state_counts": {
+          "normal": 31
+        },
+        "primary_hit_rate": 1.0,
+        "target_rule_hit_rate": 1.0,
+        "valid_geometry_rate": 1.0,
+        "cue_to_stable_match_s_includes_human_motion": 0.65,
+        "confirmation_to_stable_match_s": 0.65,
+        "observed_threshold_to_rule_activation_s": null,
+        "npu_latency_mean_ms": 17.2,
+        "npu_latency_p95_ms": 18.8,
+        "status_interval_p95_s": 0.23166146000221488
+      },
+      {
+        "label": "head_down",
+        "round": 1,
+        "human_confirmed": true,
+        "stream_interrupted": false,
+        "scored_status_frames": 31,
+        "correct": 31,
+        "state_counts": {
+          "head_down": 31
+        },
+        "primary_hit_rate": 1.0,
+        "target_rule_hit_rate": 1.0,
+        "valid_geometry_rate": 1.0,
+        "cue_to_stable_match_s_includes_human_motion": 3.724,
+        "confirmation_to_stable_match_s": 0.674,
+        "observed_threshold_to_rule_activation_s": 0.68,
+        "npu_latency_mean_ms": 17.612903225806452,
+        "npu_latency_p95_ms": 18.6,
+        "status_interval_p95_s": 0.23407194299943512
+      },
+      {
+        "label": "head_tilt",
+        "round": 1,
+        "human_confirmed": true,
+        "stream_interrupted": false,
+        "scored_status_frames": 31,
+        "correct": 0,
+        "state_counts": {
+          "head_down": 12,
+          "shoulder_tilt": 19
+        },
+        "primary_hit_rate": 0.0,
+        "target_rule_hit_rate": 1.0,
+        "valid_geometry_rate": 1.0,
+        "cue_to_stable_match_s_includes_human_motion": null,
+        "confirmation_to_stable_match_s": null,
+        "observed_threshold_to_rule_activation_s": 0.684,
+        "npu_latency_mean_ms": 17.27741935483871,
+        "npu_latency_p95_ms": 18.6,
+        "status_interval_p95_s": 0.2843225739998161
+      },
+      {
+        "label": "shoulder_tilt",
+        "round": 1,
+        "human_confirmed": true,
+        "stream_interrupted": false,
+        "scored_status_frames": 31,
+        "correct": 24,
+        "state_counts": {
+          "shoulder_tilt": 24,
+          "normal": 7
+        },
+        "primary_hit_rate": 0.7741935483870968,
+        "target_rule_hit_rate": 0.7741935483870968,
+        "valid_geometry_rate": 1.0,
+        "cue_to_stable_match_s_includes_human_motion": 3.366,
+        "confirmation_to_stable_match_s": 1.531,
+        "observed_threshold_to_rule_activation_s": 0.908,
+        "npu_latency_mean_ms": 17.90967741935484,
+        "npu_latency_p95_ms": 18.8,
+        "status_interval_p95_s": 0.232036135999806
+      },
+      {
+        "label": "hand_on_face",
+        "round": 1,
+        "human_confirmed": true,
+        "stream_interrupted": false,
+        "scored_status_frames": 31,
+        "correct": 0,
+        "state_counts": {
+          "shoulder_tilt": 31
+        },
+        "primary_hit_rate": 0.0,
+        "target_rule_hit_rate": 0.0,
+        "valid_geometry_rate": 1.0,
+        "cue_to_stable_match_s_includes_human_motion": null,
+        "confirmation_to_stable_match_s": null,
+        "observed_threshold_to_rule_activation_s": null,
+        "npu_latency_mean_ms": 17.60322580645161,
+        "npu_latency_p95_ms": 18.5,
+        "status_interval_p95_s": 0.23129401299956953
+      },
+      {
+        "label": "too_close",
+        "round": 1,
+        "human_confirmed": true,
+        "stream_interrupted": false,
+        "scored_status_frames": 30,
+        "correct": 0,
+        "state_counts": {
+          "shoulder_tilt": 4,
+          "hand_on_face": 26
+        },
+        "primary_hit_rate": 0.0,
+        "target_rule_hit_rate": 0.9,
+        "valid_geometry_rate": 1.0,
+        "cue_to_stable_match_s_includes_human_motion": null,
+        "confirmation_to_stable_match_s": null,
+        "observed_threshold_to_rule_activation_s": 0.451,
+        "npu_latency_mean_ms": 17.416666666666668,
+        "npu_latency_p95_ms": 18.9,
+        "status_interval_p95_s": 0.23035354199964786
+      },
+      {
+        "label": "normal",
+        "round": 2,
+        "human_confirmed": true,
+        "stream_interrupted": false,
+        "scored_status_frames": 30,
+        "correct": 14,
+        "state_counts": {
+          "shoulder_tilt": 16,
+          "normal": 14
+        },
+        "primary_hit_rate": 0.4666666666666667,
+        "target_rule_hit_rate": 0.4666666666666667,
+        "valid_geometry_rate": 1.0,
+        "cue_to_stable_match_s_includes_human_motion": 5.484,
+        "confirmation_to_stable_match_s": 5.484,
+        "observed_threshold_to_rule_activation_s": null,
+        "npu_latency_mean_ms": 17.39666666666667,
+        "npu_latency_p95_ms": 18.5,
+        "status_interval_p95_s": 0.2832829559993115
+      }
+    ]
+  }
+}

@@ -171,12 +171,26 @@ IoU 达不到全局 NMS 阈值（0.45），于是 NMS 之后还剩一堆近似�
 ```bash
 # 确认 UI 进程在跑
 ps -eo pid,user,cmd | grep posture_guard_ui | grep -v grep
-# 没有就手动拉起来
-sudo -u quectel env XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 \
-  GSK_RENDERER=ngl nohup python3 /opt/posture-guard/ui/posture_guard_ui.py >/tmp/ui.log 2>&1 &
+
+# 没有就用 systemd user unit 拉起（推荐）
+sudo -u quectel env XDG_RUNTIME_DIR=/run/user/1000 \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+  systemctl --user start "app-posture\x2dguard\x2dui@autostart.service"
 ```
 
+> **不要用 `nohup ... &`**：那样起的进程挂在 adb shell 上，adb 一断就可能被杀；
+> 而且环境变量（`WAYLAND_DISPLAY` / `GSK_RENDERER`）不对时可能根本不出画面。
+> 用 systemd user unit 能拿到完整的会话环境，并且可以用 `systemctl --user status` 查状态。
+>
+> 验证真的在渲染：`sudo ls -l /proc/<pid>/fd | grep -E "memfd|wayland"`
+> 应该能看到 `memfd:mutter-shared` 和 `memfd:wayland-cursor`。
+
 开机自启用 `scripts/install_ui_autostart.sh`（装到桌面用户家目录，不要用 root）。
+
+> **实测踩过的坑**：GNOME 为自启项生成的
+> `app-posture\x2dguard\x2dui@autostart.service` 可能是 `inactive (dead)` 且**没有失败记录**
+> —— 说明自动启动环节没触发它，而不是程序崩了。确认手动能起但开机不自动起时，
+> 就用上面的 `--user start` 手动拉起。
 
 ---
 
@@ -501,16 +515,67 @@ sh /opt/posture-guard/scripts/tune_speaker.sh 205   # 179=-6dB → 205≈+1dB
 六个提示语音峰值 73~99%，但 **RMS 只有 10~11%**。
 响度看的是 RMS 不是峰值，所以听感比满刻度正弦低约 9dB。
 
-`assets/voice/*.wav` 已经用 ffmpeg 做过响度归一化：
+`assets/voice/*.wav` 已经用 ffmpeg 做过响度归一化。当前素材（神经女声）的
+目标：**RMS ≈ 20%、峰值 89%（-1dBFS）**。自己换素材也要做这一步，
+否则「换了句更清楚的录音反而更轻」。
+
+**不要直接用单遍 `loudnorm`**。ffmpeg 4.4 的 `loudnorm` 在片段短于 ~3s、
+LRA 算成 0.00 的时候会给出错误增益：实测把 2.76s 的「请坐正，放平双肩」
+从 RMS 19% 压到 **3.6%**（小了 14dB，反而听不见）。两遍法（先
+`print_format=json` 测再回填 `measured_I`）在同一批素材上仍然复现这个 bug。
+
+可靠的确定性链路是「测 integrated loudness → 换算增益 → limiter」。
+不用手敲，直接跑脚本即可（两个脚本都已内置这套链路）：
 
 ```bash
-ffmpeg -i in.wav -af "acompressor=threshold=0.125:ratio=1.6:attack=8:release=120,\
-loudnorm=I=-14:TP=-1.0:LRA=11,alimiter=limit=0.89" -ar 22050 -ac 1 out.wav
+python3 scripts/make_voice_assets_neural.py --check   # 校验：格式/时长/峰值/RMS
 ```
 
-RMS 从 11% 提到 19~20%（+5dB）。自己换素材也要做这一步，否则「换了句更清楚的录音反而更轻」。
+要手工处理单个素材，等价的命令是：
 
-### 17.4 功放是 BTL 差分，喇叭必须接 VOP/VON 两端
+```bash
+# 1) 先只测量（滤镜链要和第 2 步完全一致，compress/去静音会影响响度）
+I=$(ffmpeg -hide_banner -i in.wav -af "\
+acompressor=threshold=0.125:ratio=1.6:attack=8:release=120,\
+loudnorm=I=-14:TP=-1.0:LRA=11:print_format=json" -f null - 2>&1 \
+  | python3 -c 'import sys,re;print(re.search(r"\"input_i\" : \"([-0-9.]+)\"",sys.stdin.read()).group(1))')
+# 2) 按差值加增益，再用 limiter 压住峰值
+G=$(python3 -c "print(f'{-14.0 - float(\"$I\"):.2f}')")
+ffmpeg -i in.wav -af "\
+acompressor=threshold=0.125:ratio=1.6:attack=8:release=120,\
+volume=${G}dB,alimiter=limit=0.89:level=false" \
+  -ar 24000 -ac 1 -c:a pcm_s16le out.wav
+```
+
+实测一个 2.76s 的短句：`I=-21.38` → `G=+7.38dB` → 峰值 89%、RMS 18%
+（用单遍 loudnorm 同一个输入是 RMS 3.6%）。
+
+`alimiter` 的 `level=false` 不能省：默认 `level=true` 会把限幅后的信号又拉回
+满刻度，等于白限幅（峰值照样 100%，有削波风险）。
+
+### 17.4 提示音听起来像 AI / 机器人，想换真人感的女声
+
+旧素材是 `libespeak-ng` 合成的，音色是拼接式机械音，这是「AI 味」的根源。
+换成 edge-tts 神经女声即可（`zh-CN-XiaoxiaoNeural`，语速 -8%、音调 +6Hz）：
+
+```bash
+pip install edge-tts                         # 主机一次性
+export https_proxy=http://127.0.0.1:7897     # 需要代理时（或 --proxy）
+python3 scripts/make_voice_assets_neural.py --force
+```
+
+改完直接覆盖 `assets/voice/*.wav`，不需要改任何代码、不需要重启——UI 每次播放
+都重新打开文件。只想换语气/音色就改脚本顶部的 `VOICE` / `RATE` / `PITCH` / `RATE_OVERRIDES`。
+
+选型笔记：
+
+* 别用 `zh-CN-XiaoxiaoNeural` 的默认语速说 `rest`，`-8%` 下这句话就有 6.4s，
+  所以脚本里对 `rest` 单独用 `+2%`（~5.9s）。
+* 神经 TTS 首尾各有 0.2~0.4s 静音，脚本会 `silenceremove` 掉，否则播放时长白白变长。
+* 无网时回退 `python3 scripts/make_voice_assets.py`（espeak 机械音），
+  产物同名同格式，不用动其它东西。
+
+### 17.5 功放是 BTL 差分，喇叭必须接 VOP/VON 两端
 
 网表核对结果（`docs/sch/M2` 的 allegro 网表）：
 
@@ -538,7 +603,7 @@ sh /opt/posture-guard/scripts/speaker_check.sh
 它会依次打印声卡、`spk switch`/`Speaker Switch` 状态、`spk-con` GPIO、
 DAC 寄存器、PipeWire sink，最后放一段测试音。
 
-### 17.5 用麦克风客观测喇叭（避免「我觉得好像响了」）
+### 17.6 用麦克风客观测喇叭（避免「我觉得好像响了」）
 
 排查过程中靠人耳判断来回反复，很不可靠。板载麦克风可以当测量工具，
 **但默认采集音量是 8（-91.5dB，等于关着）**：

@@ -183,8 +183,10 @@ bool CameraCapture::TryOpen(std::string* err) {
     cap_.set(cv::CAP_PROP_FPS, cfg_.capture_fps);
     requested_fourcc_ = cfg_.preferred_pixel_format;
   }
-  // 缓冲 1 帧：永远只取最新画面，不排队（§14.3）
-  cap_.set(cv::CAP_PROP_BUFFERSIZE, 1);
+  // 缓冲 2 帧：实测 bufsize=1 会让「相机填缓冲」和「read() 取帧」串行化，
+  // 640x480@MJPG 只能到 12.45fps；>=2 立刻饱和（请求30fps 时 12.4 -> 28.6fps）。
+  // 实测帧间隔均匀（p50=p95=36.0ms，无 <5ms 的突发排空），不引入陈旧画面。
+  cap_.set(cv::CAP_PROP_BUFFERSIZE, 2);
 
   const int fw = static_cast<int>(cap_.get(cv::CAP_PROP_FRAME_WIDTH));
   const int fh = static_cast<int>(cap_.get(cv::CAP_PROP_FRAME_HEIGHT));

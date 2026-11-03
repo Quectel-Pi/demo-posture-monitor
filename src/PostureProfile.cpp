@@ -16,7 +16,8 @@ namespace posture {
 namespace {
 
 const char* kFeatureNames[PostureProfile::kNumFeatures] = {
-    "head_drop", "ear_tilt", "shoulder_tilt", "size", "wrist_rise", "wrist_near"};
+    "head_drop",   "ear_tilt",   "shoulder_tilt", "size",
+    "wrist_rise",  "wrist_near", "wrist_face"};
 
 double Median(std::vector<double> v) {
   if (v.empty()) return 0.0;
@@ -81,13 +82,28 @@ PostureProfile::FeatureVec PostureProfile::DefaultFloors() {
   //   size 0.04 —— 5% 以内的距离变化不值得报
   //   wrist_rise 0.10 肩宽 —— 手腕没明显抬起来
   //   wrist_near 0.15 肩宽 —— 手腕离鼻子差 0.15 肩宽以上才有意义
-  return FeatureVec{0.05, 3.0, 2.0, 0.04, 0.10, 0.15};
+  //   wrist_face 0.15 肩宽 —— 腕到耳中点同理
+  return FeatureVec{0.05, 3.0, 2.0, 0.04, 0.10, 0.15, 0.15};
+}
+
+PostureProfile::FeatureVec PostureProfile::ReleaseScale() {
+  // 迟滞带的基准量：比 DefaultFloors 大约一个数量级，取「能看得出来的变化」。
+  // 实测对照（114 帧真标注的特征分布，见 evidence/posture-precision-2026-11-02）：
+  //   head_drop   normal -0.033 -> head_down 0.174，跨距 0.207；迟滞带取本色量级
+  //   ear_tilt    normal 3.96  -> head_tilt 18.79，跨距 14.8
+  //   size        normal 1.056 -> too_close 1.438，跨距 0.38（注意 size 尺度很大，
+  //               旧注释里“0.04 = 5% 变化”是错的：0.04 实际上是相对于基准
+  //               肩宽占比的 4%，在不同机位下对应像素差异不等，真正能区分的
+  //               量级在 0.1 以上）
+  //   wrist_rise  normal -0.044 -> hand_face 0.340，跨距 0.384
+  return FeatureVec{0.08, 2.0, 2.0, 0.10, 0.10, 0.15, 0.15};
 }
 
 const char* PostureLabelZh(const std::string& label) {
   if (label == "normal") return "正常";
   if (label == "head_down") return "低头/趴桌";
   if (label == "head_tilt") return "歪头";
+  if (label == "shoulder_tilt") return "高低肩";
   if (label == "too_close") return "离屏太近";
   if (label == "hand_face") return "托腮";
   if (label == "away") return "无人";
@@ -103,12 +119,15 @@ bool PostureProfile::Load(const std::string& path, std::string* err) {
   classes_.clear();
   rules_.clear();
   scales_ = floors_;
+  baseline_id_.clear();
   std::string line;
   while (std::getline(ifs, line)) {
     if (line.empty() || line[0] == '#') continue;
     const auto cols = SplitTab(line);
     if (cols.empty()) continue;
-    if (cols[0] == "scale" && cols.size() >= 1 + kNumFeatures) {
+    if (cols[0] == "baseline_id" && cols.size() == 2) {
+      baseline_id_ = cols[1];
+    } else if (cols[0] == "scale" && cols.size() >= 1 + kNumFeatures) {
       for (int i = 0; i < kNumFeatures; ++i) {
         double v = 0;
         if (ParseD(cols[1 + i], &v) && v > 0) scales_[i] = v;
@@ -125,6 +144,12 @@ bool PostureProfile::Load(const std::string& path, std::string* err) {
       for (int i = 0; i < kNumFeatures && 3 + kNumFeatures + i < static_cast<int>(cols.size());
            ++i) {
         if (!ParseD(cols[3 + kNumFeatures + i], &cs.mad[i])) ok = false;
+      }
+      // Zero MAD is also legitimate for stable measurements. Only absent
+      // wrist-distance sentinels are missing; valid constants still use floors.
+      for (int i = 0; i < kNumFeatures; ++i) {
+        cs.mad_missing[i] = !std::isfinite(cs.median[i]) ||
+            (i >= 5 && cs.median[i] >= 2.99 && cs.mad[i] <= 0.0);
       }
       if (ok) classes_.push_back(std::move(cs));
     } else if (cols[0] == "rule" && cols.size() >= 7) {
@@ -145,6 +170,16 @@ bool PostureProfile::Load(const std::string& path, std::string* err) {
           if (cols[8] == kFeatureNames[i]) r.guard_feature = i;
         }
         ParseD(cols[9], &r.guard_max);
+      }
+      // 第二条门控：rule ... <g1> <max1> <g2> <dir2> <max2>
+      if (cols.size() > 12) {
+        for (int i = 0; i < kNumFeatures; ++i) {
+          if (cols[10] == kFeatureNames[i]) r.guard2_feature = i;
+        }
+        double d2 = -1;
+        ParseD(cols[11], &d2);
+        r.guard2_direction = d2 < 0 ? -1 : 1;
+        ParseD(cols[12], &r.guard2_max);
       }
       if (r.feature < 0) continue;
       rules_.push_back(std::move(r));
@@ -179,6 +214,7 @@ bool PostureProfile::Save(const std::string& path, std::string* err) const {
       ofs << (i ? " " : "") << kFeatureNames[i];
     }
     ofs << "\n";
+    if (!baseline_id_.empty()) ofs << "baseline_id\t" << baseline_id_ << "\n";
     ofs << "scale";
     for (int i = 0; i < kNumFeatures; ++i) {
       char buf[32];
@@ -201,8 +237,17 @@ bool PostureProfile::Save(const std::string& path, std::string* err) const {
       ofs << "\n";
     }
     for (const auto& r : rules_) {
-      char buf[96];
-      if (r.guard_feature >= 0) {
+      char buf[160];
+      if (r.guard2_feature >= 0) {
+        std::snprintf(buf, sizeof(buf),
+                      "rule\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%s\t%.4f\t%s\t%d\t%.4f\n",
+                      r.priority, r.label.c_str(), kFeatureNames[r.feature],
+                      r.direction < 0 ? "-" : "+", r.threshold, r.normal_median,
+                      r.class_median,
+                      r.guard_feature >= 0 ? kFeatureNames[r.guard_feature] : "none",
+                      r.guard_feature >= 0 ? r.guard_max : 0.0,
+                      kFeatureNames[r.guard2_feature], r.guard2_direction, r.guard2_max);
+      } else if (r.guard_feature >= 0) {
         std::snprintf(buf, sizeof(buf),
                       "rule\t%d\t%s\t%s\t%s\t%.4f\t%.4f\t%.4f\t%s\t%.4f\n",
                       r.priority, r.label.c_str(), kFeatureNames[r.feature],
@@ -260,6 +305,8 @@ void PostureProfile::SetClass(const std::string& label,
     dev.reserve(vals.size());
     for (double v : vals) dev.push_back(std::fabs(v - med));
     cs.mad[i] = Median(dev);
+    cs.mad_missing[i] = !std::isfinite(med) ||
+        (i >= 5 && med >= 2.99 && cs.mad[i] <= 0.0);
   }
   for (auto& c : classes_) {
     if (c.label == label) {
@@ -282,6 +329,25 @@ void PostureProfile::SetRule(const Rule& r) {
   rules_.push_back(r);
 }
 
+// 门控统一定义在这里，Classify / ClassifyHysteretic 共用，避免两条路径漂移。
+// guard : 单向，需 f[g] <  guard_max
+// guard2: 双向（guard2_direction 决定 <= 还是 >=）
+bool PostureProfile::GuardsPass(const Rule& r, const FeatureVec& f) {
+  if (r.guard_feature >= 0 && r.guard_feature < kNumFeatures &&
+      f[r.guard_feature] >= r.guard_max) {
+    return false;
+  }
+  if (r.guard2_feature >= 0 && r.guard2_feature < kNumFeatures) {
+    const double g = f[r.guard2_feature];
+    if (r.guard2_direction < 0) {
+      if (g > r.guard2_max) return false;
+    } else {
+      if (g < r.guard2_max) return false;
+    }
+  }
+  return true;
+}
+
 void PostureProfile::SortRules() {
   std::sort(rules_.begin(), rules_.end(),
             [](const Rule& a, const Rule& b) { return a.priority < b.priority; });
@@ -298,17 +364,19 @@ void PostureProfile::RecomputeScales() {
 }
 
 PostureProfile::Verdict PostureProfile::Classify(const FeatureVec& f,
-                                                 double /*accept_radius*/) const {
+                                                 double accept_radius,
+                                                 const std::string& excluded_label) const {
   Verdict v;
   if (rules_.empty()) return v;
+  if (!std::all_of(f.begin(), f.end(), [](double x) { return std::isfinite(x); })) return v;
 
   // 按优先级依次试，第一个命中的就是结论。
   // 「越过阈值多少」除以该特征的有意义尺度，作为确信度。
   for (const auto& r : rules_) {
+    if (r.label == excluded_label) continue;
     if (r.feature < 0 || r.feature >= kNumFeatures) continue;
-    // 互斥门控：不满足就跳过这条规则，试下一条
-    if (r.guard_feature >= 0 && r.guard_feature < kNumFeatures &&
-        f[r.guard_feature] >= r.guard_max) {
+    // 门控：两条都不满足就跳过这条规则，试下一条
+    if (!GuardsPass(r, f)) {
       v.all.emplace_back(r.label, 1e9);
       continue;
     }
@@ -328,24 +396,136 @@ PostureProfile::Verdict PostureProfile::Classify(const FeatureVec& f,
     return v;
   }
 
-  // 全部没命中：如果 normal 存在且各特征都在 normal 的合理范围内 → normal
+  return NormalVerdict(f, accept_radius, excluded_label);
+}
+
+PostureProfile::Verdict PostureProfile::NormalVerdict(const FeatureVec& f,
+                                                     double radius,
+                                                     const std::string& excluded_label) const {
+  Verdict v;
+  if (!(radius > 0.0) || !std::isfinite(radius)) radius = 3.0;
   for (const auto& c : classes_) {
     if (c.label != "normal") continue;
     double worst = 0.0;
+    int measured = 0;
     for (int i = 0; i < kNumFeatures; ++i) {
+      if (c.mad_missing[i]) continue;
+      // A rejected contact candidate (hand measurably away from face) does not
+      // make an otherwise normal pose abnormal just because the arm was raised.
+      if (excluded_label == "hand_face" && i >= 4) continue;
+      // Missing live wrist distances cannot prove normality in that dimension.
+      if (i >= 5 && f[i] >= 2.99) continue;
+      if (!std::isfinite(f[i])) return v;
       const double spread = std::max({c.mad[i], floors_[i], 1e-9});
-      worst = std::max(worst, std::fabs(f[i] - c.median[i]) / spread);
+      double deviation = std::fabs(f[i] - c.median[i]);
+      // Moving farther from the screen/face is evidence against too-close/contact,
+      // not an unsupported unhealthy pose. Frame geometry still has its own gate.
+      if (i == 3) deviation = std::max(0.0, f[i] - c.median[i]);
+      if (i >= 5) deviation = std::max(0.0, c.median[i] - f[i]);
+      worst = std::max(worst, deviation / spread);
+      ++measured;
     }
     v.strength = -worst;
-    v.distance = 1.0 / (std::fabs(v.strength) + 1.0);
-    v.label = "normal";
-    char buf[80];
-    std::snprintf(buf, sizeof(buf), "全部规则未命中（离正常最近的特征偏差 %.1fσ）",
-                  worst);
+    v.distance = worst;
+    if (measured > 0 && worst <= radius) v.label = "normal";
+    char buf[128];
+    std::snprintf(buf, sizeof(buf), "未命中已知异常；正常样本最大偏差 %.1f / %.1f%s",
+                  worst, radius, v.label.empty() ? "，无法可靠判断" : "");
     v.matched_rule = buf;
     return v;
   }
   return v;
+}
+
+PostureProfile::Verdict PostureProfile::ClassifyHysteretic(
+    const FeatureVec& f, const std::string& active_label,
+    double release_ratio, const std::string& excluded_label, double normal_radius) const {
+  Verdict v;
+  if (rules_.empty()) return v;
+  if (!std::all_of(f.begin(), f.end(), [](double x) { return std::isfinite(x); })) return v;
+
+  // 没有当前标签（刚启动 / 刚丢过状态）时，迟滞毫无意义，走纯阈值判定。
+  if (active_label.empty()) return Classify(f, normal_radius, excluded_label);
+
+  const Rule* active_rule = nullptr;
+  for (const auto& r : rules_) {
+    if (r.label == active_label) {
+      active_rule = &r;
+      break;
+    }
+  }
+
+  for (const auto& r : rules_) {
+    if (r.label == excluded_label) continue;
+    if (r.feature < 0 || r.feature >= kNumFeatures) continue;
+    if (!GuardsPass(r, f)) {
+      v.all.emplace_back(r.label, 1e9);
+      continue;
+    }
+    const double floor = std::max(floors_[r.feature], 1e-9);
+    // 当前已采纳的标签用【释放阈值】判定：必须退回 release_band 才算离开。
+    // 其它标签仍用原阈值 —— 只给“退出”加惰性，不降低“进入”的灵敏度。
+    const bool is_active = (active_rule != nullptr && r.label == active_rule->label);
+    const double thr =
+        is_active ? r.threshold - r.direction * RuleReleaseBand(r, release_ratio)
+                  : r.threshold;
+    const double over = (f[r.feature] - thr) * r.direction;
+    v.all.emplace_back(r.label, over > 0 ? 0.0 : -over / floor);
+    if (over <= 0) continue;
+
+    v.label = r.label;
+    v.strength = over / floor;
+    v.distance = 1.0 / (v.strength + 1.0);
+    char buf[96];
+    if (is_active) {
+      std::snprintf(buf, sizeof(buf), "%s %s %.3f（释放阈 %.3f，实测 %.3f）",
+                    kFeatureNames[r.feature], r.direction < 0 ? "<=" : ">=",
+                    thr, thr, f[r.feature]);
+    } else {
+      std::snprintf(buf, sizeof(buf), "%s %s %.3f（阈值 %.3f，实测 %.3f）",
+                    kFeatureNames[r.feature], r.direction < 0 ? "<=" : ">=",
+                    r.threshold, r.threshold, f[r.feature]);
+    }
+    v.matched_rule = buf;
+    return v;
+  }
+
+  return NormalVerdict(f, normal_radius, excluded_label);
+}
+
+std::string PostureProfile::BaselineId(const Baseline& b) {
+  if (!b.valid || b.created_at.empty()) return "";
+  return b.created_at + "|" + b.camera_id + "|" + b.model_sha256 + "|" +
+      std::to_string(b.frame_width) + "x" + std::to_string(b.frame_height);
+}
+
+void PostureProfile::BindBaseline(const Baseline& baseline) {
+  baseline_id_ = BaselineId(baseline);
+}
+
+bool PostureProfile::MatchesBaseline(const Baseline& baseline, std::string* why) const {
+  const auto current = BaselineId(baseline);
+  if (baseline_id_.empty() || current.empty()) {
+    if (why) *why = "姿势画像缺少标定版本，请重新采集并生成画像";
+    return false;
+  }
+  if (baseline_id_ != current) {
+    if (why) *why = "姿势画像与当前标定不匹配，请按当前标定重新采集画像";
+    return false;
+  }
+  return true;
+}
+
+double PostureProfile::RuleReleaseBand(const Rule& r, double release_ratio) const {
+  if (release_ratio <= 0.0) return 0.0;
+  if (r.feature < 0 || r.feature >= kNumFeatures) return 0.0;
+  const FeatureVec rs = ReleaseScale();
+  // 同时被 DefaultFloors 封顶，避免某个特征的 release 带小到不起作用。
+  const double band = std::max(rs[r.feature], floors_[r.feature]) * release_ratio;
+  // 不能超过「阈值到 normal 中位数」的跨度，否则释放带会比整条规则还宽。
+  const double span = std::fabs(r.threshold - r.normal_median);
+  if (span > 1e-9) return std::min(band, span);
+  return band;
 }
 
 std::vector<PostureProfile::Separability> PostureProfile::separability() const {
@@ -420,8 +600,12 @@ bool BuildFeatureVector(const PostureMetrics& m, const Baseline& b,
   // 手腕到鼻子的距离（未经门控的原始值；99 是"手腕不可信"的哨兵，映射成 3.0）
   double wrist_near = m.wrist_valid ? static_cast<double>(m.wrist_to_nose_raw) : 3.0;
   if (wrist_near > 3.0) wrist_near = 3.0;
+  // 手腕到耳中点距离 / 肩宽 —— 「手真的贴在脸旁」的直接度量。
+  // 比 wrist_near（到鼻子）稳：鼻子在俯拍下不可靠，耳中点稳得多。
+  double wrist_face = m.face_geom_valid ? static_cast<double>(m.face_wrist_ear) : 3.0;
+  if (wrist_face > 3.0) wrist_face = 3.0;
   *out = PostureProfile::FeatureVec{head_drop, ear_tilt, shoulder_tilt, size,
-                                    wrist_rise, wrist_near};
+                                    wrist_rise, wrist_near, wrist_face};
   return true;
 }
 

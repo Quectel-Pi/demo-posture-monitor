@@ -1,0 +1,18 @@
+[  6%] Built target test_command_parse
+[ 10%] Building CXX object CMakeFiles/posture_core.dir/src/RknnPoseEngine.cpp.o
+[ 13%] Linking CXX static library libposture_core.a
+[ 55%] Built target posture_core
+[ 58%] Linking CXX executable test_config
+[ 62%] Linking CXX executable test_posture_rules
+[ 65%] Linking CXX executable test_session_timer
+[ 68%] Linking CXX executable posture_guard
+[ 75%] Built target test_session_timer
+[ 75%] Built target test_config
+[ 79%] Built target test_posture_rules
+[ 82%] Building CXX object CMakeFiles/test_rknn_decode.dir/tests/test_rknn_decode.cpp.o
+[ 86%] Linking CXX executable test_profile_hysteresis
+[ 89%] Built target test_profile_hysteresis
+[ 96%] Built target posture_guard
+[100%] Linking CXX executable test_rknn_decode
+[100%] Built target test_rknn_decode
+FAIL: two anchors for one person produced 2 persons

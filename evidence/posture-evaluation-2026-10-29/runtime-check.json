@@ -1,0 +1,14 @@
+{
+  "scored_status_frames": 215,
+  "correct_primary_frames": 100,
+  "npu_mean_ms": 17.488837209302325,
+  "npu_p95_ms": 18.6,
+  "fps_mean": 9.003720930232559,
+  "valid_geometry_frames": 215,
+  "hashes_unchanged": true,
+  "end_hashes": {
+    "config_sha256": "c8e2f3c68e91ae6c2bdf3cd395d62f8762e96aa5dd6f981660c822bacf03f756",
+    "baseline_sha256": "7d10f22c505c52404c826bfaca7a8616e8591d0f4b909b5381e98f6a1a631a03",
+    "binary_sha256": "13f961c0e00a343bfd029e985641e6d8fc0bb56cf500d7f6151521698436bcdb"
+  }
+}

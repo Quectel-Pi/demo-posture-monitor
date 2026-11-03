@@ -1,0 +1,21 @@
+{
+  "hand_face": {
+    "hand_face": 71
+  },
+  "head_down": {
+    "head_down": 65,
+    "UNKNOWN": 1
+  },
+  "head_tilt": {
+    "head_tilt": 70
+  },
+  "normal": {
+    "normal": 142
+  },
+  "shoulder_tilt": {
+    "shoulder_tilt": 69
+  },
+  "too_close": {
+    "too_close": 71
+  }
+}

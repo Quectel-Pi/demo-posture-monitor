@@ -1,0 +1,31 @@
+[  7%] Built target test_command_parse
+[ 11%] Building CXX object CMakeFiles/posture_core.dir/src/Config.cpp.o
+[ 14%] Linking CXX static library libposture_core.a
+[ 59%] Built target posture_core
+[ 62%] Building CXX object CMakeFiles/test_config.dir/tests/test_config.cpp.o
+[ 66%] Linking CXX executable test_posture_rules
+[ 70%] Linking CXX executable posture_guard
+[ 74%] Linking CXX executable test_session_timer
+[ 77%] Built target test_session_timer
+[ 81%] Built target test_posture_rules
+[ 85%] Linking CXX executable test_profile_hysteresis
+[ 88%] Built target test_profile_hysteresis
+[ 96%] Built target posture_guard
+[100%] Linking CXX executable test_config
+[100%] Built target test_config
+Internal ctest changing into directory: /userdata/build-src/build
+Test project /userdata/build-src/build
+    Start 1: posture_rules
+1/5 Test #1: posture_rules ....................   Passed    0.01 sec
+    Start 2: session_timer
+2/5 Test #2: session_timer ....................   Passed    0.01 sec
+    Start 3: config
+3/5 Test #3: config ...........................   Passed    0.01 sec
+    Start 4: profile_hysteresis
+4/5 Test #4: profile_hysteresis ...............   Passed    0.01 sec
+    Start 5: command_parse
+5/5 Test #5: command_parse ....................   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 5
+
+Total Test time (real) =   0.05 sec

@@ -289,6 +289,31 @@ BREAK_DUE --无人连续 10s--> ABSENT
 界面命令（客户端 → 服务）：`{"cmd":"ack"}`、`{"cmd":"snooze","minutes":15}`、
 `{"cmd":"clear_snooze"}`、`{"cmd":"calibrate"}`。
 
+### 7.1 语音播报（离线 WAV）
+
+语音不在 C++ 服务里，在桌面 UI 进程（`ui/posture_guard_ui.py` 的 `VoicePlayer`）：
+收到 `{"type":"notification"}` 后按 `key` 用 `paplay` 播放
+`assets/voice/<key>.wav`。白名单 6 个 key：`shoulder_tilt`、`head_down`、
+`head_tilt`、`too_close`、`hand_on_face`、`rest`；key 不在白名单直接拒绝，
+所以路径穿越（`../../x`）进不来。播放不阻塞 GTK、不堆积队列
+（10s 限流，`rest` 可打断前面的播报）。
+
+素材是**预生成的 24kHz mono 16bit WAV**，运行期完全离线、板端零新依赖。
+两条生成路径产物同名同格式，可随时互换：
+
+| 脚本 | 引擎 | 音色 | 需要网络 |
+|---|---|---|---|
+| `scripts/make_voice_assets_neural.py` | edge-tts `zh-CN-XiaoxiaoNeural` | 神经女声，接近真人 | 烘焙时一次 |
+| `scripts/make_voice_assets.py` | libespeak-ng `cmn` | 机械音 | 不需要 |
+
+文案只定义在 `make_voice_assets.py` 的 `PROMPTS` 里，神经脚本 import 复用，
+避免两处漂移。两个脚本的归一化目标一致（RMS ≈ 20%、峰值 ≤ -1dBFS），
+详见 [troubleshooting §17.3](troubleshooting.md)。
+
+**为什么不用单遍 `loudnorm`**：ffmpeg 4.4 的 `loudnorm` 对 3 秒以内的短句会算错
+增益（实测把 RMS 从 19% 压到 3.6%，小了 14dB，反而听不见）。所以神经脚本用
+「测量 integrated loudness → 换算增益 → `alimiter level=false`」这套确定性链路。
+
 ## 8. 配置
 
 `/etc/posture-guard/posture.yaml`，解析器是内置的 YAML 子集实现

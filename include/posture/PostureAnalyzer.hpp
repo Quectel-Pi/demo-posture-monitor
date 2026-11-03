@@ -6,6 +6,7 @@
 #pragma once
 
 #include <array>
+#include <deque>
 #include <optional>
 #include <string>
 #include <vector>
@@ -88,7 +89,16 @@ class PostureAnalyzer {
   // ---- 逐姿势校准画像（per-posture profile）----
   // 启用后，姿态状态由「最近原型分类 + 标签保持 N 秒」决定，
   // 不再使用手调阈值。规则仍会继续计算，仅用于诊断对照。
-  void SetProfile(const PostureProfile* profile, double hold_s, double accept_radius);
+  void SetProfile(const PostureProfile* profile, double hold_s, double accept_radius,
+                  double release_ratio = 0.5);
+  // 逐类覆盖保持门限（秒，<=0 = 用统一值）
+  void SetHoldOverrides(double hand_face_s, double head_tilt_s, double head_down_s,
+                        double too_close_s) {
+    profile_hold_hand_face_s_ = hand_face_s;
+    profile_hold_head_tilt_s_ = head_tilt_s;
+    profile_hold_head_down_s_ = head_down_s;
+    profile_hold_too_close_s_ = too_close_s;
+  }
   void ClearProfile();
   bool profile_active() const { return profile_ != nullptr && !profile_->empty(); }
   const std::vector<std::string>& profile_labels() const { return profile_label_names_; }
@@ -158,23 +168,57 @@ class PostureAnalyzer {
   // ---- 画像分类状态 ----
   const PostureProfile* profile_ = nullptr;
   double profile_hold_s_ = 2.0;
+  // 逐类保持门限（0 = 用 profile_hold_s_）
+  double profile_hold_hand_face_s_ = 0.0;
+  double profile_hold_head_tilt_s_ = 0.0;
+  double profile_hold_head_down_s_ = 0.0;
+  double profile_hold_too_close_s_ = 0.0;
+  // 某标签实际使用的保持门限
+  double HoldForLabel(const std::string& label) const;
   double profile_accept_radius_ = 3.0;
+  double profile_release_ratio_ = 0.5;  // 迟滞比例，0 = 关闭
   std::string pending_label_;
   SteadyTime pending_since_{};
   std::string active_label_;              // 已采纳的标签（空 = normal/未定）
+
+  // ---- 时间窗投票（替代「连续保持 N 秒」）----
+  // 旧做法：同一标签必须无间隔地连续保持 N 秒才采纳。问题是一个噪声帧
+  // （关键点跳动、瞬时遮挡）就会把 pending_since_ 重置，于是 N 必须设得很大
+  // 才能稳（实测只得 1.5~2.5s）—— 延迟和精度被绑死。
+  // 新做法：只看最近 kLabelWindowS 秒内各标签占了多少帧，"占多数"就采纳。
+  // 偶尔一帧噪声不会把票数清零，所以窗口可以设得又短又稳。
+  //   · 进入快速：窗口 0.6s，80% 帧（约 12 帧）支持就切
+  //   · 退出良好：窗口 1.2s，70% 帧支持就切回正常（防抖仍强）
+  struct LabelVote {
+    std::string label;
+    SteadyTime at{};
+  };
+  std::deque<LabelVote> votes_;
+  static constexpr double kEnterWindowS = 0.60;
+  static constexpr double kExitWindowS = 1.20;
+  static constexpr double kEnterRatio = 0.80;
+  static constexpr double kExitRatio = 0.70;
+  // 在窗口内某标签的帧数与总帧数
+  void TallyVotes(SteadyTime now, double window_s, const std::string& label,
+                  int* hit, int* total) const;
+  bool VoteAccepts(SteadyTime now, const std::string& label, bool is_exit) const;
+
   std::vector<std::string> profile_label_names_;
   bool ProfileUpdate(const PostureMetrics& m, SteadyTime now, PostureObservation* obs);
+  void MarkProfileUncertain(SteadyTime now);
+  std::optional<SteadyTime> profile_uncertain_since_;
 
   // width_ratio 的滑动中值窗口。
   // 为什么要平滑：肩宽是「左肩-右肩」两点之差，w8a8 量化下任一肩点抖动
   // 几十像素会直接放大成 ±39% 的 width_ratio 波动（实测 0.377→0.524），
-  // 而人实际距离没变。距离是慢变量，中值滤波几乎不引入延迟但能压掉离群帧。
-  std::array<float, 7> wr_window_{};
+  // 而人实际距离没变。3 帧中值保留单帧离群抑制，阶跃响应约一帧，避免大窗口拖慢反馈。
+  static constexpr int kSmoothWindow = 3;
+  std::array<float, kSmoothWindow> wr_window_{};
   int wr_count_ = 0;
   int wr_next_ = 0;
   // 耳线角同样做中值平滑：实测单帧会从 -9.5° 跳到 +15.9°（耳点检歪），
   // 不平滑则歪头判据只能靠运气连上 5 秒。
-  std::array<float, 7> ear_window_{};
+  std::array<float, kSmoothWindow> ear_window_{};
   int ear_count_ = 0;
   int ear_next_ = 0;
 

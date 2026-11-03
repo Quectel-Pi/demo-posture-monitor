@@ -1,0 +1,8 @@
+hand_on_face.wav              3.09s  22050Hz 1ch 16b peak=100.0% rms= 19.5% clip= 3 F0=  88.6 std= 48.1 cv=50.0% rng= 4.0st jit=0.7% cen=   901Hz hf= 1.9% sil=22.5%
+head_down.wav                 3.45s  22050Hz 1ch 16b peak=100.0% rms= 19.1% clip=16 F0=  87.8 std= 57.1 cv=58.2% rng= 3.9st jit=0.7% cen=   911Hz hf= 1.9% sil=24.2%
+head_tilt.wav                 3.68s  22050Hz 1ch 16b peak=100.0% rms= 19.1% clip= 4 F0=  91.3 std= 77.2 cv=70.4% rng= 4.1st jit=0.7% cen=   790Hz hf= 1.5% sil=20.9%
+rest.wav                      9.44s  22050Hz 1ch 16b peak=100.0% rms= 20.1% clip=29 F0=  87.8 std= 54.6 cv=56.4% rng= 3.9st jit=0.7% cen=   872Hz hf= 1.1% sil=12.4%
+shoulder_tilt.wav             3.25s  22050Hz 1ch 16b peak=100.0% rms= 19.3% clip= 1 F0=  91.9 std= 63.3 cv=61.4% rng= 3.8st jit=0.6% cen=   790Hz hf= 1.1% sil=22.4%
+too_close.wav                 4.27s  22050Hz 1ch 16b peak=100.0% rms= 19.9% clip= 4 F0=  88.6 std= 42.9 cv=45.4% rng= 4.2st jit=0.4% cen=   819Hz hf= 0.9% sil=17.1%
+
+→ raw/espeak-head.json

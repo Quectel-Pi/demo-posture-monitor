@@ -1,0 +1,12 @@
+{
+  "posture_state": "USER_AWAY",
+  "present": false,
+  "voice_enabled": true,
+  "session_state": "ABSENT",
+  "use_s": 0.0,
+  "remaining_s": 1200,
+  "far_look_s": 20.0,
+  "fps": 8.8,
+  "latency_ms": 16.8,
+  "has_baseline": true
+}

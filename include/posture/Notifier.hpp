@@ -24,6 +24,9 @@ namespace posture {
 
 // 运行态快照，序列化成一行 JSON 推给 UI
 struct StatusSnapshot {
+  int bad_posture_frames = 0;
+  double posture_reminder_cooldown_s = 0.0;
+  std::string posture_reminder_reason;
   std::string posture_state = "UNKNOWN";
   std::string posture_state_zh = "无法判定";
   std::string explanation;
@@ -169,6 +172,9 @@ class Notifier {
   WallTime last_publish_{};
   bool has_published_ = false;
   std::string socket_path_;
+  std::uint64_t event_sequence_ = 0;
+  std::string last_event_id_;
+  std::string last_event_key_;
 };
 
 }  // namespace posture

@@ -45,8 +45,27 @@ user:
   calibrate_on_start: false          # true = 每次启动都重新校准
 
 posture:
-  # 界面快速反馈，语音由 notification.posture_hold_s 单独防抖。
+  # 界面由时间窗投票防抖，语音由 notification.posture_frames 计数。
   profile_hold_s: 0.5
+  # 逐类覆盖保持门限（0 = 用上面统一值）。
+  # 托腮最容易误报（抬手拿东西瞬间就报），而真托着时至少好几秒，
+  # 把它的门限单独拉长是最干净的降误报手段。
+  profile_hold_hand_face_s: 0.8
+  profile_hold_head_tilt_s: 0.0
+  profile_hold_head_down_s: 0.0
+  profile_hold_too_close_s: 0.0
+  # 画像级联的迟滞比例（相对 ReleaseScale）；0 = 关闭迟滞。
+  #
+  # 为什么需要：画像级联是纯阈值判定，特征在阈值附近每帧微动就会在两个标签
+  # 之间来回跳。实测板端生产机 1.7 小时内发生 514 次「画像判定切换」
+  # （307 次/小时）—— 界面姿态指示闪烁、语音反复播报，用户感受就是“不准、吵”。
+  #
+  # 迟滞只给「退出」加惰性：进入仍用原阈值（不降低灵敏度），
+  # 离开必须退回 trigger - release_band 才算真的离开。
+  # 用生产 journal 的 514 条切换反向验证：比例 0.5 可拦下 287 次「离开」中的
+  # 105 次（37%），其中低头/趴桌 42%、歪头 20%，均为“特征还没真的退回去就判离开”的假切换。
+  # 验证脚本：scripts/verify_hysteresis_journal.py
+  profile_release_ratio: 0.5
   # ---- 高低肩（§4.2，V1 核心规则）----
   shoulder_trigger_deg: 12
   shoulder_recover_deg: 8
@@ -92,12 +111,22 @@ posture:
   too_close_hold_s: 0.5
   # 托腮：手腕要比「校准时的手腕高度」抬高多少肩宽才算抬起手来。
   # 不能用「手腕高于肩线」—— 俯拍下下巴/手腕投影都在肩线以下。
-  hand_face_wrist_rise: 0.35
+  hand_face_wrist_rise: 0.20
   hand_face_ratio: 0.95              # 抬起来之后，手腕-鼻子距离 / 肩宽 < 该值 = 托腮
+  # 托腮的「手真贴在脸旁」门限：手腕-耳中点距离 / 肩宽 < 该值才算。
+  # 只靠「手抬起来了」会把抬手掠脸、后仰都算进来（实测误报 1~4s 的瞬时托腮）。
+  hand_face_wrist_face_max: 0.95
+  # 托腮时手必须在耳中点以下这么多（单位肩宽）。手举到眼睛以上
+  # （摸脸/摸头发/撑额头）不算托腮。基准用耳中点，比鼻子稳定得多。
+  hand_face_below_ear_min: 0.0
+  # 托腮时「手确实贴着脸」的上限：腕-鼻距离/肩宽 超过它就不算托腮。
+  # 实测标定：托腮 0.44~0.49 | 手离开脸 1.09 | 正常坐 1.05~1.74
+  # 只在测量有效时生效（测不到 = 哨兵 99，必须放行，否则会挡掉真托腮）
+  hand_face_near_max: 0.85
   # 人体尺寸门：肩宽占比低于「校准基准 × 该值」就不认作主用户。
   # 挡「人走后椅子被当成人」（实测假阳性宽占比 0.12 vs 正常 0.35）。
   min_size_ratio: 0.55
-  hand_face_hold_s: 0.5
+  hand_face_hold_s: 3.0
 
 eye_care:
   continuous_use_s: 1200             # 20 分钟（20-20-20 规则）
@@ -114,7 +143,9 @@ ui:
   jpeg_quality: 70
 
 notification:
-  posture_hold_s: 2.0       # 姿势状态稳定后再播报；与界面识别速度分开
+  posture_frames: 10       # 连续 10 个有效不良坐姿推理帧后提醒；不叠加秒数门限
+  # posture_frames=0 时使用的兼容时间门限；默认帧计数模式不叠加此等待。
+  posture_hold_s: 0.5
   cooldown_s: 60
   headless_log: true
   desktop_popup: false

@@ -1,0 +1,25 @@
+== 采集「高低肩」 15 秒 ==
+   要领：保持头部直立，一侧肩膀明显抬高，避免同时歪头
+
+   请摆好姿势… 5      请摆好姿势… 4      请摆好姿势… 3      请摆好姿势… 2      请摆好姿势… 1      采集中（15 秒），保持别动…          
+
+   有效样本 69/69 帧，已存 /var/lib/posture-guard/posture-samples-current/shoulder_tilt.json
+   各特征中位数：
+     head_drop      (头低量)  中位   +0.126   范围 [ +0.069,  +0.193]
+     ear_tilt       (耳线歪)  中位   +5.076   范围 [ +0.024, +10.276]
+     shoulder_tilt  (肩线歪)  中位  +14.600   范围 [ +9.000, +20.900]
+     size           (靠近倍数)  中位   +1.096   范围 [ +1.018,  +1.153]
+     wrist_rise     (抬手量)  中位   +0.059   范围 [ +0.000,  +0.141]
+     wrist_near     (手离鼻)  中位   +1.259   范围 [ +0.991,  +3.000]
+     wrist_face     (手离耳)  中位   +1.450   范围 [ +1.189,  +3.000]
+
+   == 和「正常」的可分性 ==
+        head_drop       normal  +0.089  vs  shoulder_tilt  +0.126   差  0.037  分离比  0.74
+        ear_tilt        normal  +3.576  vs  shoulder_tilt  +5.076   差  1.500  分离比  0.50
+     ✅ shoulder_tilt   normal  +0.000  vs  shoulder_tilt +14.600   差 14.600  分离比  7.30
+     ✅ size            normal  +1.200  vs  shoulder_tilt  +1.096   差  0.104  分离比  2.59
+     ✅ wrist_rise      normal  +0.266  vs  shoulder_tilt  +0.059   差  0.207  分离比  2.07
+        wrist_near      normal  +1.235  vs  shoulder_tilt  +1.259   差  0.024  分离比  0.16
+        wrist_face      有一组缺测，不参与可分性评估
+
+   ✅ 可判：靠「肩线歪」(分离比 7.30) 能把这个姿势和正常分开

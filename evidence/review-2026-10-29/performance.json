@@ -1,0 +1,13 @@
+{
+  "before": {
+    "samples": 9,
+    "fps_mean": 5.17,
+    "latency_mean_ms": 19.39
+  },
+  "after": {
+    "samples": 24,
+    "fps_mean": 9.95,
+    "latency_mean_ms": 17.23
+  },
+  "note": "Short same-device samples; no accuracy-rate claim."
+}

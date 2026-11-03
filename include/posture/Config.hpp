@@ -21,6 +21,12 @@ struct Config {
   int camera_height = 480;
   int capture_fps = 20;
   int infer_fps = 8;
+  // NPU 核掩码：RK3576 只有 CORE_0/CORE_1 两个 NPU 核。
+  //   "auto"      = runtime 自己选（实测等价于单核）
+  //   "0" / "1"   = 绑定单核
+  //   "0_1"       = 双核并行（实测 yolov8n-pose 14.1ms -> 10.6ms，快 25%）
+  // 双核会吃满两个 NPU，若同一台板上还有别的 NPU 任务，改回 "auto"。
+  std::string npu_core_mask = "0_1";
   std::string preferred_pixel_format = "MJPEG";
   float camera_reconnect_backoff_s = 1.0f;
 
@@ -100,15 +106,27 @@ struct Config {
   // 托腮门控：手腕必须比「校准时的手腕高度」抬高多少肩宽。
   // 不能用「手腕高于肩线」—— 俯拍机位下下巴/手腕投影都在肩线以下，
   // 实测托腮时 wrist_y_rel=0.38（仍低于肩线 0.38），而正常坐 1.19。
-  float hand_face_wrist_rise = 0.35f;
+  // ★ 0.35 -> 0.20：教学样本实测真实托腮 rise 中位 0.340，旧值 0.35 恰好把它
+  //   卡在门外（22 帧里只过 9 帧），导致真实托腮召回 0.0。新值让 22/22 帧全过。
+  float hand_face_wrist_rise = 0.20f;
   float hand_face_ratio = 0.95f;
+  // 托腮的「手确实贴着脸」上限：手腕-鼻子距离 / 肩宽 超过该值就不算托腮。
+  // 实测标定（板 2，2026-11-03）：
+  //   托腮 wrist_near 0.44~0.49   |   手离开脸 1.09   |   正常坐 1.05~1.74
+  // 取 0.85 = 两侧留足余量。
+  // ★ 只在「测量有效」时才用：wrist_near 的哨兵 99 表示「测不到」而不是
+  //   「很远」，那种帧必须放行，否则会把真托腮全挡掉。
+  float hand_face_near_max = 0.85f;
 
   // 人体尺寸门：主用户的肩宽占比不得低于「校准基准 × 该比例」。
   // 用来挡「人走了以后椅子/桌角被当成人体」—— 实测假阳性框只有 95x118px
   // （宽占比 0.12），而正常坐着的用户是 0.35。同时也能挡掉这类小框
   // 造成的「多人」误判。
   float min_size_ratio = 0.55f;     // 手腕-鼻子距离 / 肩宽
-  float hand_face_hold_s = 5.0f;
+  // 手腕-鼻子距离 / 肩宽
+  // ★ 托腮保持门限单独给：这是把「抬手掠过」和「真托着」分开的唯一维度。
+  //   实测真实托腮持续 >=11s，误报持续 1~4s。
+  float hand_face_hold_s = 3.0f;
 
   // ---- eye care（§5.1 / §5.2）----
   float continuous_use_s = 1200.0f;
@@ -119,7 +137,13 @@ struct Config {
 
   // ---- notification（§13.1）----
   float cooldown_s = 60.0f;
-  double posture_reminder_hold_s = 2.0;  // independently debounce audible reminders
+  // 播报前的额外稳定门限（秒）。
+  // ★ 2.0 -> 0.5：姿势层已经用「时间窗投票」做了去抖（0.6s/80%），
+  //   这里再等 2 秒等于重复去抖，纯加延迟。
+  //   实测延迟链：画像投票 0.6s + 本门限 2.0s = 2.6s（用户感知约 5 秒，
+  //   含人动作的生理起势时间）。降到 0.5s 后总门限约 1.1s。
+  int posture_reminder_frames = 10;  // >0: consecutive valid bad frames; 0: legacy time mode
+  double posture_reminder_hold_s = 0.5;
   bool headless_log = true;
   bool desktop_popup = false;
   bool voice = false;
@@ -144,7 +168,24 @@ struct Config {
   // 存在就用画像分类（最近原型），不存在就退回阈值规则。
   std::string profile_file = "/var/lib/posture-guard/postures.txt";
   double profile_hold_s = 2.0;         // 同一标签连续多久才采纳
+  // 逐类覆盖（0 = 用 profile_hold_s）。
+  // 为什么需要：各类误报的代价不同 —— 托腮误报最让人反感（抬手拿水杯就报），
+  // 而且要「真的托着」才有意义；实测评测里真实托腮持续 ≥11s，
+  // 误报只持续 1~4s，用保持门限是最干净的分离手段。
+  double profile_hold_hand_face_s = 0.0;
+  double profile_hold_head_tilt_s = 0.0;
+  double profile_hold_head_down_s = 0.0;
+  double profile_hold_too_close_s = 0.0;
+  // 托腮的「手在脸旁」门限（腕-耳中点 / 肩宽）。
+  // 判据是影像几何，不由 issue 校准得出，所以放配置而不是画像文件。
+  float hand_face_wrist_face_max = 0.95f;
+  // 托腮时手必须在耳朵以下（防止举手/摸头发/撑额头被判成托腮）。
+  // 定义性几何约束，不是参数校准。基准是耳中点（比鼻子稳）。
+  float hand_face_below_ear_min = 0.0f;
   double profile_accept_radius = 3.0;  // 距离超过它判 UNKNOWN（不在已校准范围内）
+  // 画像级联的迟滞比例（相对 ReleaseScale）：0 = 关闭，0.5 = 默认。
+  // 作用见 PostureProfile::ClassifyHysteretic 的注释。
+  double profile_release_ratio = 0.5;
   // 基准漂移阈值：宽占比差这么多倍就判基准失效、自动重校准。
   // 之所以要收紧到 1.45：全部姿势特征都是「相对基准」的量，人一退椅子
   // 就整体失配（实测校准 0.459、后来 0.305，差 1.5 倍，size 变成 0.66，

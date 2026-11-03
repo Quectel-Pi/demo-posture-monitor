@@ -19,7 +19,7 @@ echo "== 配置 =="
 cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release 2>&1 | sed 's/^/   /'
 
 echo "== 编译（-j$(nproc)）=="
-cmake --build "$BUILD_DIR" -j"$(nproc)" 2>&1 | grep -E "error|warning: |Built target|Linking" | sed 's/^/   /' || true
+cmake --build "$BUILD_DIR" -j"$(nproc)" 2>&1 | sed 's/^/   /'
 
 echo "== 单元测试 =="
 ctest --test-dir "$BUILD_DIR" --output-on-failure 2>&1 | tail -12

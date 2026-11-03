@@ -154,6 +154,10 @@ EyeCareMonitor::Output EyeCareMonitor::Update(bool present, SteadyTime now) {
     }
   }
 
+  if (state_ == SessionState::kBreakDue && break_due_at_) {
+    out.rest_remaining_s = std::max(0.0, static_cast<double>(cfg_.far_look_s) -
+        std::chrono::duration<double>(now - *break_due_at_).count());
+  }
   out.state = state_;
   out.active_s = active_accum_;
   out.remaining_s = std::max(0.0, continuous_use_s_ - active_accum_);

@@ -13,6 +13,10 @@ namespace {
 constexpr float kRad2Deg = 57.29577951308232f;
 constexpr float kDeg2Rad = 0.017453292519943295f;
 constexpr float kMinShoulderPx = 24.f;
+// 腕到鼻距离 / 肩宽 的上限。超过说明手腕关键点是外推出来的垃圾值
+// （实测俯拍机位下手腕常在画面外，模型会给一个离谱坐标）。
+// 托腮实测 <=0.6，正常坐 <=2.6，取 8 作为「明显不合理」的分界。
+constexpr float kMaxWristToNose = 8.f;
 
 float Dist(float ax, float ay, float bx, float by) {
   const float dx = ax - bx;
@@ -148,8 +152,8 @@ PostureAnalyzer::PostureAnalyzer(const Config& cfg, const Baseline& baseline)
                        .priority = 20}),
       hand_face_rule_({.key = "hand_on_face",
                        .label_zh = "托腮",
-                       .trigger = cfg.hand_face_ratio,
-                       .recover = cfg.hand_face_ratio * 1.25f,
+                       .trigger = cfg.hand_face_near_max,
+                       .recover = cfg.hand_face_near_max * 1.25f,
                        .hold_s = cfg.hand_face_hold_s,
                        .recover_hold_s = cfg.recovery_hold_s,
                        .higher_is_bad = false,   // 距离越小越可疑
@@ -177,6 +181,10 @@ PostureAnalyzer::PostureAnalyzer(const Config& cfg, const Baseline& baseline)
 
 void PostureAnalyzer::SetBaseline(const Baseline& baseline) {
   baseline_ = baseline;
+  profile_uncertain_since_.reset();
+  active_label_.clear();
+  pending_label_.clear();
+  votes_.clear();
   ResetSmoother();
   // 低头阈值随基准的头肩距离缩放：俯视机位基准只有 -0.20 肩宽，
   // 固定 0.35 的阈值在那里永远达不到（鼻子压到肩线上最多降 0.20）。
@@ -208,13 +216,64 @@ void PostureAnalyzer::SetBaseline(const Baseline& baseline) {
 
 float PostureAnalyzer::HeadDownThreshold() const { return head_down_rule_.trigger(); }
 
+void PostureAnalyzer::TallyVotes(SteadyTime now, double window_s, const std::string& label,
+                                 int* hit, int* total) const {
+  *hit = 0;
+  *total = 0;
+  for (const auto& v : votes_) {
+    const double age = std::chrono::duration<double>(now - v.at).count();
+    if (age > window_s) continue;   // 窗口外的旧票不算
+    ++(*total);
+    if (v.label == label) ++(*hit);
+  }
+}
+
+bool PostureAnalyzer::VoteAccepts(SteadyTime now, const std::string& label,
+                                  bool is_exit) const {
+  const double override_hold = (label == "hand_face") ? profile_hold_hand_face_s_ : 0.0;
+  const double win = is_exit ? kExitWindowS : std::max(kEnterWindowS, override_hold);
+  const double ratio = is_exit ? kExitRatio : kEnterRatio;
+  int hit = 0, total = 0;
+  TallyVotes(now, win, label, &hit, &total);
+  // 帧数太少不下结论（刚启动/丢点恢复时）
+  if (total < 3) return false;
+  // Require real time coverage, not just six adjacent frames (0.2s at 30fps).
+  // This also works at 8fps, where six frames do not fit inside a 0.6s window.
+  double oldest_age = 0.0;
+  for (const auto& vote : votes_) {
+    const double age = std::chrono::duration<double>(now - vote.at).count();
+    if (age <= win) oldest_age = std::max(oldest_age, age);
+  }
+  if (oldest_age < win * 0.75) return false;
+  return static_cast<double>(hit) / total >= ratio;
+}
+
+double PostureAnalyzer::HoldForLabel(const std::string& label) const {
+  if (label == "hand_face" && profile_hold_hand_face_s_ > 0) {
+    return profile_hold_hand_face_s_;
+  }
+  if (label == "head_tilt" && profile_hold_head_tilt_s_ > 0) {
+    return profile_hold_head_tilt_s_;
+  }
+  if (label == "head_down" && profile_hold_head_down_s_ > 0) {
+    return profile_hold_head_down_s_;
+  }
+  if (label == "too_close" && profile_hold_too_close_s_ > 0) {
+    return profile_hold_too_close_s_;
+  }
+  return profile_hold_s_;
+}
+
 void PostureAnalyzer::SetProfile(const PostureProfile* profile, double hold_s,
-                                 double accept_radius) {
+                                 double accept_radius, double release_ratio) {
   profile_ = profile;
+  profile_uncertain_since_.reset();
   profile_hold_s_ = hold_s > 0 ? hold_s : 2.0;
   profile_accept_radius_ = accept_radius > 0 ? accept_radius : 3.0;
+  profile_release_ratio_ = release_ratio > 0 ? release_ratio : 0.0;
   pending_label_.clear();
   active_label_.clear();
+  votes_.clear();
   pending_since_ = SteadyTime{};
   profile_label_names_ = profile ? profile->labels() : std::vector<std::string>{};
   if (profile_ && !profile_->empty()) {
@@ -225,15 +284,25 @@ void PostureAnalyzer::SetProfile(const PostureProfile* profile, double hold_s,
     }
     LOG_INFO("逐姿势画像已启用：", profile_label_names_.size(), " 个姿势 [", names,
              "]  总样本 ", profile_->total_samples(),
-             "  保持门限 ", profile_hold_s_, "s  接受半径 ", profile_accept_radius_);
+             "  保持门限 ", profile_hold_s_, "s  接受半径 ", profile_accept_radius_,
+             "  迟滞比例 ", profile_release_ratio_);
   }
 }
 
 void PostureAnalyzer::ClearProfile() {
   profile_ = nullptr;
+  profile_uncertain_since_.reset();
   pending_label_.clear();
   active_label_.clear();
+  votes_.clear();
   profile_label_names_.clear();
+}
+
+void PostureAnalyzer::MarkProfileUncertain(SteadyTime now) {
+  if (!profile_uncertain_since_) profile_uncertain_since_ = now;
+  if (SecondsBetween(*profile_uncertain_since_, now) >= 0.30) active_label_.clear();
+  pending_label_.clear();
+  votes_.clear();
 }
 
 // 返回 true 表示本帧已由画像给出结论（obs.state/explanation 已填好）
@@ -245,51 +314,124 @@ bool PostureAnalyzer::ProfileUpdate(const PostureMetrics& m, SteadyTime now,
   // 而 main.cpp 的自动校准条件是 state != UNKNOWN —— 两边互相堵死，
   // 结果就是「删了基准反而永远校准不了」（实测踩过）。
   if (!baseline_.valid) return false;
+  std::string profile_issue;
+  if (!profile_->MatchesBaseline(baseline_, &profile_issue)) {
+    active_label_.clear();
+    pending_label_.clear();
+    votes_.clear();
+    obs->profile_used = true;
+    obs->profile_label.clear();
+    obs->state = PostureState::kUnknown;
+    obs->explanation = profile_issue;
+    return true;
+  }
   PostureProfile::FeatureVec f{};
   std::string why;
   if (!BuildFeatureVector(m, baseline_, &f, &why)) {
-    pending_label_.clear();
+    MarkProfileUncertain(now);
     pending_since_ = now;
     obs->profile_used = true;
     obs->profile_label.clear();
     obs->explanation = "画像分类缺关键量：" + why;
-    // 关键量缺失：维持上一状态一小会儿，超时就报 UNKNOWN
-    if (!active_label_.empty()) {
-      obs->state = PostureState::kUnknown;
-      return true;
-    }
     obs->state = PostureState::kUnknown;
     return true;
   }
 
-  const auto v = profile_->Classify(f, profile_accept_radius_);
+  PostureProfile::Verdict v = profile_->ClassifyHysteretic(f, active_label_,
+                                                         profile_release_ratio_, "",
+                                                         profile_accept_radius_);
+  // ★ 托腮的方向性几何约束（不是参数校准，是定义）：
+  //   「托腮」= 手抬到脸旁边、且手在耳朵以下（托下巴/托脸颊）。
+  //   手举到眼睛以上（摸脸、摸头发、撑额头）不是托腮 —— 而此时 wrist_rise
+  //   同样很大，只靠画像规则拦不住。以耳中点为基准（比鼻子稳得多）。
+  bool reject_hand_face = false;
+  if (v.label == "hand_face" && m.face_geom_valid &&
+      m.face_wrist_below_ear < cfg_.hand_face_below_ear_min) {
+    reject_hand_face = true;
+    v.matched_rule = "hand_face 被拒：手在耳中点之上（非托腮）";
+    v.strength = 0.0;
+  }
+  // ★ 托腮的「手确实贴着脸」约束：有可靠测量时才校验。
+  //   实测现场：手已经离开脸（wrist_near=1.09）但因为腕高仍高于基准，
+  //   会一直被钉在「托腮」不退（实测持续 62s 才恢复）。
+  //   ★ 关键区别（踩过的坑）：wrist_near 在鼻子不可靠时会落到哨兵 99，
+  //     那意味着「测不到」，不是「手很远」—— 测不到时必须放行，
+  //     否则会把真托腮全部挡掉（历史上这条把召回从 100% 压到 32%）。
+  constexpr float kWristNearSentinel = 50.f;
+  if (v.label == "hand_face" && m.wrist_valid &&
+      m.wrist_to_nose_raw < kWristNearSentinel &&
+      m.wrist_to_nose_raw > cfg_.hand_face_near_max) {
+    reject_hand_face = true;
+    v.matched_rule = "hand_face 被拒：手已离开脸（腕-鼻 " +
+                     std::to_string(m.wrist_to_nose_raw).substr(0, 4) + "）";
+    v.strength = 0.0;
+  }
+  if (reject_hand_face) {
+    // Re-evaluate the cascade without this impossible class; valid frames may
+    // still be normal/head-down/too-close instead of becoming UNKNOWN.
+    v = profile_->ClassifyHysteretic(f, active_label_ == "hand_face" ? "" : active_label_,
+                                     profile_release_ratio_, "hand_face", profile_accept_radius_);
+  }
+  // Missing ear evidence must not look like a measured zero-degree head tilt.
+  // A known bad pose may still be identified from other valid features.
+  if (v.label == "normal" && profile_->Has("head_tilt") &&
+      (!baseline_.ear_angle_valid || !m.ear_angle_valid)) {
+    v.label.clear();
+    v.matched_rule = "耳部关键点不足，无法排除歪头，不能确认正常坐姿";
+  }
   obs->profile_used = true;
   obs->profile_label = v.label;
   obs->profile_distance = v.distance;
   obs->profile_strength = v.strength;
   obs->profile_rule = v.matched_rule;
 
-  // 标签保持：同一个标签连续 hold_s 秒才采纳，避免抖动
-  if (v.label == pending_label_ && !v.label.empty()) {
-    const double held = std::chrono::duration<double>(now - pending_since_).count();
-    if (held >= profile_hold_s_ && v.label != active_label_) {
-      const std::string prev = active_label_;
-      active_label_ = v.label;
-      LOG_INFO("画像判定切换：", prev.empty() ? "（无）" : PostureLabelZh(prev), " -> ",
-               PostureLabelZh(active_label_), "  命中 ", v.matched_rule, "  强度 ",
-               v.strength, "  特征 head_drop=", f[0], " ear_tilt=", f[1],
-               " size=", f[3], " wrist_rise=", f[4], " wrist_near=", f[5]);
-      // 切换到异常姿势时产生一次提醒触发器
-      if (active_label_ != "normal" && active_label_ != "away") {
-        RuleTrigger t;
-        t.key = active_label_;
-        t.label_zh = PostureLabelZh(active_label_);
-        t.active_s = held;
-        t.priority = 60;
-        obs->triggers.push_back(t);
-      }
+  // 记录本帧的票（时间窗投票）。
+  votes_.push_back({v.label, now});
+  // 清掉明显过期的票（保留两倍最长窗口足够）
+  while (!votes_.empty() &&
+         std::chrono::duration<double>(now - votes_.front().at).count() > std::max(kExitWindowS, profile_hold_hand_face_s_) * 2.0) {
+    votes_.pop_front();
+  }
+
+  // An unsupported observation must not keep a previous NORMAL/bad label alive.
+  if (v.label.empty()) {
+    MarkProfileUncertain(now);
+    obs->state = PostureState::kUnknown;
+    obs->explanation = v.matched_rule.empty() ? "姿势超出已采集样本范围，无法可靠判断" : v.matched_rule;
+    return true;
+  }
+
+  profile_uncertain_since_.reset();
+  // 标签采纳：改用【时间窗投票】而不是「连续保持 N 秒」。
+  //   · 旧做法一个噪声帧就能把计时清零，所以 N 必须很大才稳（1.5~2.5s），
+  //     叠加播报门限后总延迟 3.5~4.5s。
+  //   · 投票制下偶发噪声不改变多数，窗口可以缩到 0.6s，同时比旧的更稳。
+  //   · 进入与退出用不同窗口：进入 0.6s/80%（快），退出 1.2s/70%（稳）。
+  if (!v.label.empty() && v.label != active_label_ &&
+      VoteAccepts(now, v.label, /*is_exit=*/v.label == "normal" && !active_label_.empty())) {
+    const std::string prev = active_label_;
+    active_label_ = v.label;
+    pending_label_.clear();
+    int hit = 0, total = 0;
+    TallyVotes(now, kEnterWindowS, active_label_, &hit, &total);
+    LOG_INFO("画像判定切换：", prev.empty() ? "（无）" : PostureLabelZh(prev), " -> ",
+             PostureLabelZh(active_label_), "  命中 ", v.matched_rule, "  强度 ",
+             v.strength, "  特征 head_drop=", f[0], " ear_tilt=", f[1],
+             " size=", f[3], " wrist_rise=", f[4], " wrist_near=", f[5],
+             " wrist_face=", f[6], " below_ear=", m.face_wrist_below_ear,
+             "  投票 ", hit, "/", total, " (", kEnterWindowS, "s)");
+    // 切换到异常姿势时产生一次提醒触发器
+    if (active_label_ != "normal" && active_label_ != "away") {
+      RuleTrigger t;
+      t.key = active_label_;
+      t.label_zh = PostureLabelZh(active_label_);
+      t.active_s = kEnterWindowS;
+      t.priority = 60;
+      obs->triggers.push_back(t);
     }
-  } else if (v.label != pending_label_) {
+  }
+  // 跟踪“当前主标签”供 UNKNOWN 判定（很久都没主标签才算真不确定）
+  if (v.label != pending_label_) {
     pending_label_ = v.label;
     pending_since_ = now;
   }
@@ -317,12 +459,21 @@ bool PostureAnalyzer::ProfileUpdate(const PostureMetrics& m, SteadyTime now,
     obs->state = PostureState::kHeadDown;
   } else if (active_label_ == "head_tilt") {
     obs->state = PostureState::kHeadTilt;
+  } else if (active_label_ == "shoulder_tilt") {
+    obs->state = PostureState::kShoulderTilt;
   } else if (active_label_ == "too_close") {
     obs->state = PostureState::kTooClose;
   } else if (active_label_ == "hand_face") {
     obs->state = PostureState::kHandOnFace;
   } else {
-    obs->state = PostureState::kNormal;
+    // ★ 不认识的标签绝不能静默当作 normal —— 那会让「规则命中了但界面报正常」，
+    //   排查时完全看不出问题（曾踩过：画像加了 shoulder_tilt 规则，
+    //   但因为这里没有对应分支，命中了也显示“正常”）。
+    obs->state = PostureState::kUnknown;
+    obs->explanation = std::string("未识别的画像标签：") + active_label_;
+    obs->active_keys.clear();
+    if (!active_label_.empty()) obs->active_keys.push_back(active_label_);
+    return true;
   }
   obs->active_keys.clear();
   if (active_label_ != "normal") obs->active_keys.push_back(active_label_);
@@ -383,8 +534,10 @@ float PostureAnalyzer::SmoothEarAngle(float raw, bool valid) {
 }
 
 void PostureAnalyzer::ResetRules() {
+  profile_uncertain_since_.reset();
   pending_label_.clear();
   active_label_.clear();
+  votes_.clear();
   ResetSmoother();
   shoulder_rule_.Reset();  head_down_rule_.Reset();
   head_tilt_rule_.Reset();
@@ -546,18 +699,50 @@ PostureMetrics PostureAnalyzer::ComputeMetrics(const PersonPose& person, int fra
   // 托腮的两个量：手腕到鼻子的距离（越小越像托腮）、手腕相对肩线的高度。
   // 两者都从「最靠近鼻子的那只手腕」算，保证是同一只手。
   float best = std::numeric_limits<float>::max();
+  float best_wrist_x = 0.f;
   float best_wrist_y = 0.f;
+  bool found_wrist = false;
   for (const Keypoint* w : {&wr_l, &wr_r}) {
-    if (w->confidence < min_conf) continue;
-    m.wrist_valid = true;
+    if (w->confidence < min_conf || !inside(*w)) continue;
+    // ★ 先校验坐标是否可用，再置 wrist_valid。
+    //   旧写法只查 confidence 就置 wrist_valid=true，但 0 置信度/越界的关键点
+    //   坐标可能是 0 或外推值，算出来的距离毫无意义。
     const float d = Dist(w->x, w->y, nose.x, nose.y) / sw;
+    if (!std::isfinite(d) || d <= 0.f || d > kMaxWristToNose) continue;
+    found_wrist = true;
     if (d < best) {
       best = d;
+      best_wrist_x = w->x;
       best_wrist_y = w->y;
     }
   }
-  m.wrist_to_nose_raw = m.wrist_valid ? best : 99.f;
-  if (m.wrist_valid) m.wrist_y_rel = (best_wrist_y - sy) / sw;
+  m.wrist_valid = found_wrist;
+  // ★ 93 不再用「wrist_valid ? best : 99」——两路是分开算的，就永远不可能
+  //   出现 wrist_valid=true 而 wrist_to_nose_raw 停在哨兵（历史数据里见过
+  //   13/22 帧这样，直接把托腮判没了）。这里把两个量绑在同一个条件上。
+  m.wrist_to_nose_raw = found_wrist ? best : 99.f;
+  if (found_wrist) m.wrist_y_rel = (best_wrist_y - sy) / sw;
+
+  // ★ 人脸框几何（全部以肩宽 sw 为单位，机位无关）。三项一起才等价于「手托着脸」：
+  //   face_wrist_ear : 手腕到耳中点的距离 —— 手真正贴在脸侧/下巴时最小，
+  //                    抬手从脸前掠过时明显更大。这是新增的主判据。
+  //   face_arm_raise : 手腕离下巴的距离 —— 「手抬到脸附近」的绝对量，不受腕高基准漂移影响。
+  //   face_wrist_below_nose : 手腕在鼻子下方多少 —— 挡住「手举到眼睛以上」（撑额头、
+  //                    举手、摸头发），那不是托腮。
+  const bool ear_pair_ok = m.ear_mid_valid && inside(ear_l) && inside(ear_r);
+  const float ear_mid_x = ear_pair_ok ? 0.5f * (ear_l.x + ear_r.x) : nose.x;
+  const float ear_mid_y = ear_pair_ok ? 0.5f * (ear_l.y + ear_r.y) : nose.y;
+  m.face_wrist_ear =
+      m.wrist_valid ? Dist(best_wrist_x, best_wrist_y, ear_mid_x, ear_mid_y) / sw : 99.f;
+  // COCO-17 无下巴点：用「鼻子往下 0.4×肩宽」近似下巴。托腮时手正好落在这里，
+  // 手放桌面时这里离手很远，两者分得很开；0.5px 级的下巴误差对判别无影响。
+  const float chin_x = nose.x;
+  const float chin_y = nose.y + sw * 0.40f;
+  m.face_arm_raise =
+      m.wrist_valid ? Dist(best_wrist_x, best_wrist_y, chin_x, chin_y) / sw : 99.f;
+  m.face_wrist_below_ear =
+      m.wrist_valid ? (best_wrist_y - ear_mid_y) / sw : 99.f;
+  m.face_geom_valid = m.wrist_valid && ear_pair_ok;
 
   // 门控：手腕必须比「校准时的手腕高度」明显抬高。
   // ★ 不能用「手腕高于肩线」：俯拍机位下下巴与手腕的投影都落在肩线以下，
@@ -794,7 +979,7 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
     head_tilt_rule_.Update(std::nullopt, now);
     too_close_rule_.Update(std::nullopt, now);
     hand_face_rule_.Update(std::nullopt, now);
-    pending_label_.clear();
+    MarkProfileUncertain(now);
     pending_since_ = now;
     last_metrics_ = PostureMetrics{};
     // 长时间没有有效数据 -> 复位规则，避免用旧异常状态无限延续（§11.3 末尾要求）
@@ -838,6 +1023,7 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
   if (sel.ambiguous) {
     pending_label_.clear();
     pending_since_ = now;
+    votes_.clear();
     // 多人：不做个体判定，但规则计时也被挂起（不给 optional -> 不新增异常）
     auto r1 = shoulder_rule_.Update(std::nullopt, now);
     auto r2 = head_down_rule_.Update(std::nullopt, now);
@@ -891,7 +1077,9 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
     }
   }
   v_too_close = m.width_ratio;
-  v_hand_face = m.wrist_to_nose;
+  // 托腮主判据：手腕到耳中点距离 / 肩宽。手真贴着脸时最小；
+  // 正常坐/手在桌面时很大；抬手从脸前掠过时也已经变大。
+  v_hand_face = m.face_wrist_ear;
 
   auto r_shoulder = shoulder_rule_.Update(v_shoulder, now);
   auto r_head_down = head_down_rule_.Update(v_head_down, now);
@@ -922,19 +1110,14 @@ PostureObservation PostureAnalyzer::Update(const std::vector<PersonPose>& person
   push(r_hand_face, hand_face_rule_);
 
   // 多规则同时成立时按优先级取主状态（§5.3：合并为一个通知）
-  if (r_hand_face.latched) {
-    obs.state = PostureState::kHandOnFace;
-  } else if (r_head_down.latched) {
-    obs.state = PostureState::kHeadDown;
-  } else if (r_shoulder.latched) {
-    obs.state = PostureState::kShoulderTilt;
-  } else if (r_head_tilt.latched) {
-    obs.state = PostureState::kHeadTilt;
-  } else if (r_too_close.latched) {
-    obs.state = PostureState::kTooClose;
-  } else {
-    obs.state = PostureState::kNormal;
-  }
+  // Head tilt also moves head height; leaning forward also moves wrists.
+  // Resolve those coupled features before the less specific shoulder/hand rules.
+  if (r_head_tilt.latched) obs.state = PostureState::kHeadTilt;
+  else if (r_head_down.latched) obs.state = PostureState::kHeadDown;
+  else if (r_too_close.latched) obs.state = PostureState::kTooClose;
+  else if (r_hand_face.latched) obs.state = PostureState::kHandOnFace;
+  else if (r_shoulder.latched) obs.state = PostureState::kShoulderTilt;
+  else obs.state = PostureState::kNormal;
 
   if (baseline_.valid) {
     obs.explanation = std::string(ToChinese(obs.state));

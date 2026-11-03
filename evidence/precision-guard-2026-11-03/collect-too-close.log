@@ -1,0 +1,25 @@
+== 采集「离屏太近」 15 秒 ==
+   要领：身体前倾、脸向屏幕靠近（别真贴上），保持不动
+
+   请摆好姿势… 5      请摆好姿势… 4      请摆好姿势… 3      请摆好姿势… 2      请摆好姿势… 1      采集中（15 秒），保持别动…          
+
+   有效样本 71/71 帧，已存 /var/lib/posture-guard/posture-samples-current/too_close.json
+   各特征中位数：
+     head_drop      (头低量)  中位   +0.205   范围 [ +0.170,  +0.299]
+     ear_tilt       (耳线歪)  中位   +0.876   范围 [ +0.024,  +3.276]
+     shoulder_tilt  (肩线歪)  中位   +1.300   范围 [ +0.000,  +3.000]
+     size           (靠近倍数)  中位   +1.551   范围 [ +1.516,  +1.645]
+     wrist_rise     (抬手量)  中位   +0.642   范围 [ +0.556,  +0.673]
+     wrist_near     (手离鼻)  中位   +0.538   范围 [ +0.475,  +0.688]
+     wrist_face     (手离耳)  中位   +0.706   范围 [ +0.668,  +0.778]
+
+   == 和「正常」的可分性 ==
+     ✅ head_drop       normal  +0.089  vs  too_close  +0.205   差  0.116  分离比  2.32
+        ear_tilt        normal  +3.576  vs  too_close  +0.876   差  2.700  分离比  0.90
+        shoulder_tilt   normal  +0.000  vs  too_close  +1.300   差  1.300  分离比  0.65
+     ✅ size            normal  +1.200  vs  too_close  +1.551   差  0.351  分离比  8.78
+     ✅ wrist_rise      normal  +0.266  vs  too_close  +0.642   差  0.376  分离比  3.76
+     ✅ wrist_near      normal  +1.235  vs  too_close  +0.538   差  0.697  分离比  4.65
+        wrist_face      有一组缺测，不参与可分性评估
+
+   ✅ 可判：靠「靠近倍数」(分离比 8.78) 能把这个姿势和正常分开

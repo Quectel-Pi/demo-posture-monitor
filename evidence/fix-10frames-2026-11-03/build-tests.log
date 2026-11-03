@@ -1,0 +1,42 @@
+[  3%] Building CXX object CMakeFiles/test_command_parse.dir/tests/test_command_parse.cpp.o
+[  7%] Building CXX object CMakeFiles/posture_core.dir/src/PostureAnalyzer.cpp.o
+[ 11%] Building CXX object CMakeFiles/posture_core.dir/src/ReminderManager.cpp.o
+[ 14%] Linking CXX executable test_command_parse
+[ 14%] Built target test_command_parse
+[ 18%] Linking CXX static library libposture_core.a
+[ 59%] Built target posture_core
+[ 62%] Building CXX object CMakeFiles/test_session_timer.dir/tests/test_session_timer.cpp.o
+[ 66%] Building CXX object CMakeFiles/test_config.dir/tests/test_config.cpp.o
+[ 70%] Building CXX object CMakeFiles/test_posture_rules.dir/tests/test_posture_rules.cpp.o
+[ 74%] Building CXX object CMakeFiles/posture_guard.dir/src/main.cpp.o
+[ 77%] Linking CXX executable test_config
+[ 77%] Built target test_config
+[ 81%] Building CXX object CMakeFiles/test_profile_hysteresis.dir/tests/test_profile_hysteresis.cpp.o
+/userdata/build-src/tests/test_profile_hysteresis.cpp: In function ‘void {anonymous}::TestNoActiveEqualsPlain()’:
+/userdata/build-src/tests/test_profile_hysteresis.cpp:144:16: warning: unused variable ‘kR’ [-Wunused-variable]
+  144 |   const double kR = 0.5;
+      |                ^~
+[ 85%] Linking CXX executable test_profile_hysteresis
+[ 85%] Built target test_profile_hysteresis
+[ 88%] Linking CXX executable test_session_timer
+[ 88%] Built target test_session_timer
+[ 92%] Linking CXX executable test_posture_rules
+[ 92%] Built target test_posture_rules
+[ 96%] Linking CXX executable posture_guard
+[100%] Built target posture_guard
+Internal ctest changing into directory: /userdata/build-src/build
+Test project /userdata/build-src/build
+    Start 1: posture_rules
+1/5 Test #1: posture_rules ....................   Passed    0.01 sec
+    Start 2: session_timer
+2/5 Test #2: session_timer ....................   Passed    0.01 sec
+    Start 3: config
+3/5 Test #3: config ...........................   Passed    0.01 sec
+    Start 4: profile_hysteresis
+4/5 Test #4: profile_hysteresis ...............   Passed    0.01 sec
+    Start 5: command_parse
+5/5 Test #5: command_parse ....................   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 5
+
+Total Test time (real) =   0.05 sec

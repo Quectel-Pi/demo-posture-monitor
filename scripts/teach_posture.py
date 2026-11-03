@@ -6,7 +6,7 @@
     · 每个姿势存成独立样本文件，可单独重采、单独删除
     · 采完立刻算「这个姿势和 normal 的分得开吗」，分不开就直接说分不开，
       不会让你白采下一轮
-    · 全部采完之后用最近原型分类做离线交叉验证，给出混淆矩阵
+    · 全部采完之后用级联规则回放训练样本；独立测试需另采一批，不能混用
 
 用法（板端，服务保持运行）：
     # 1) 先采 normal（其它姿势都相对它比较，必须先有）
@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import socket
 import statistics
@@ -43,20 +44,21 @@ SOCKET = "/run/posture-guard/status.sock"
 SAMPLE_DIR = "/var/lib/posture-guard/posture-samples"
 PROFILE_FILE = "/var/lib/posture-guard/postures.txt"
 
-NF = 6
+NF = 7
 FEATURES = ["head_drop", "ear_tilt", "shoulder_tilt", "size", "wrist_rise",
-            "wrist_near"]
+            "wrist_near", "wrist_face"]
 FEATURE_ZH = {
     "head_drop": "头低量", "ear_tilt": "耳线歪", "shoulder_tilt": "肩线歪",
-    "size": "靠近倍数", "wrist_rise": "抬手量", "wrist_near": "手离脸",
+    "size": "靠近倍数", "wrist_rise": "抬手量", "wrist_near": "手离鼻",
+    "wrist_face": "手离耳",
 }
 # 每个特征「低于这个变化量就没意义」的下限（与 C++ DefaultFloors 一致）
-FLOORS = [0.05, 3.0, 2.0, 0.04, 0.10, 0.15]
+FLOORS = [0.05, 3.0, 2.0, 0.04, 0.10, 0.15, 0.15]
 # 每个姿势的「定义性特征」候选（数据会再筛一遍，只保留真的动了的）
 # 顺序对应 FEATURES: head_drop, ear_tilt, shoulder_tilt, size, wrist_rise
-LABELS_ORDER = ["normal", "head_down", "head_tilt", "too_close", "hand_face"]
+LABELS_ORDER = ["normal", "head_down", "head_tilt", "shoulder_tilt", "too_close", "hand_face"]
 LABEL_ZH = {"normal": "正常", "head_down": "低头/趴桌", "head_tilt": "歪头",
-            "too_close": "离屏太近", "hand_face": "托腮", "away": "无人"}
+            "shoulder_tilt": "高低肩", "too_close": "离屏太近", "hand_face": "托腮", "away": "无人"}
 
 #   head_drop, ear_tilt, shoulder_tilt, size, wrist_rise, wrist_near
 CANDS = {
@@ -77,26 +79,29 @@ def mad(vals, med):
     return median([abs(v - med) for v in vals]) if vals else 0.0
 
 
-# 判定优先级：数字越小越先试。
-# 顺序不是随便定的，是被数据逼出来的：
-#   · 歪头必须在低头之前 —— 歪头会让一只耳朵下沉，head_drop 也涨到 0.18，
-#     先判低头就会把头歪吃掉
-#   · 凑近必须在托腮之前 —— 身体前倾时手一定跟着靠近脸（实测 wrist_near
-#     从 3.0 掉到 0.56，和托腮的 0.41 几乎一样），先判托腮就会把凑近吃掉
+# Direct distance and hand-contact evidence precede correlated head/shoulder
+# angles. Forward leaning raises wrists; supporting the chin tilts the head.
+# Head tilt still precedes head drop because tilting lowers one ear.
 PRIORITY = {
-    "head_tilt": 1,
-    "head_down": 2,
-    "too_close": 3,
-    "hand_face": 4,
-    "away": 5,
+    "too_close": 1,
+    "hand_face": 2,
+    "head_tilt": 3,
+    "head_down": 4,
+    "shoulder_tilt": 5,
+    "away": 6,
 }
 # 每个姿势「可以拿来判定」的特征候选（顺序对应 FEATURES）
 #   head_drop, ear_tilt, shoulder_tilt, size, wrist_rise, wrist_near
 CAND_FEATURES = {
+    "shoulder_tilt": ["shoulder_tilt"],
     "head_down":  ["head_drop"],
     "head_tilt":  ["ear_tilt"],
     "too_close":  ["size"],
-    "hand_face":  ["wrist_near", "wrist_rise"],
+    # 托腮只看「手抬起来了」。★ 不能把 wrist_near（到手-鼻子距离）当判据：
+    #   俯拍机位下鼻子关键点极不可靠（实测 x 抖动 ±69px），大量帧算不出
+    #   距离、停在哨兵值 99 -> 特征变成 3.0，反被 guard 当成「手离脸远」排除掉。
+    #   实测该 guard 把托腮召回从 77% 压到 32%，已删除。
+    "hand_face":  ["wrist_rise"],
 }
 
 
@@ -112,7 +117,8 @@ def build_rules(samples: dict) -> list[dict]:
         return []
     nm = [median([v[i] for v in samples["normal"]]) for i in range(NF)]
     rules = []
-    for label, feats in samples.items():
+    for label in sorted(samples, key=lambda name: PRIORITY.get(name, 50)):
+        feats = samples[label]
         if label == "normal":
             continue
         cands = CAND_FEATURES.get(label)
@@ -133,14 +139,21 @@ def build_rules(samples: dict) -> list[dict]:
             continue
         _score, k, gap = best
         direction = 1 if cur[k] >= nm[k] else -1
-        thr = best_threshold(samples, label, k, direction)
-        # 互斥门控：歪头会压低一侧耳朵 → head_drop 跟着涨（实测 0.145），
-        # 会把「歪头」抢成「低头」。耳线已经明显歪了就不许再判低头。
+        thr = best_threshold(samples, label, k, direction, prior_rules=rules)
+        # ★ 不再生成 wrist_near < X 这种 guard。
+        #   原因：wrist_near 在鼻子不可靠时会落到哨兵 3.0，被 guard 读成
+        #   「手离脸很远」而排除 —— 实际是「测不到」，不是「很远」。
+        #   实测这一条把托腮召回从 77% 压到 32%，是托腮识别不准的根因。
         guard = None
         if label == "head_down" and "head_tilt" in samples:
             k_ear = FEATURES.index("ear_tilt")
             ht_ear = median([v[k_ear] for v in samples["head_tilt"]])
             guard = ("ear_tilt", (nm[k_ear] + ht_ear) / 2.0)
+        # 托腮的第二道门：手必须在鼻子下方（不是撑额头/举手）。
+        # 这是方向性约束，不需要从样本标定阈值。
+        guard2 = None
+        if label == "hand_face":
+            guard2 = ("below_nose", 1)   # 1 = 需 >= 阈值（腕在鼻下方）
         rules.append({
             "priority": PRIORITY.get(label, 50),
             "label": label,
@@ -152,23 +165,44 @@ def build_rules(samples: dict) -> list[dict]:
             "class_median": cur[k],
             "gap": gap,
             "guard": guard,
+            "guard2": guard2,
         })
     rules.sort(key=lambda r: r["priority"])
     return rules
 
 
-def best_threshold(samples: dict, label: str, k: int, direction: int) -> float:
+def best_threshold(samples: dict, label: str, k: int, direction: int,
+                   prior_rules: list[dict] | None = None) -> float:
     """在该特征上搜索最优分割阈值（最大化平衡准确率）。
 
     为什么不用中点：托腮时下巴压手，head_drop 会被动升到 0.17，
     而低头是 0.32 —— 中点 0.158 会把托腮吃掉（实测 4/9 帧判错）。
     搜出来的阈值会自己躲开这种重叠。
 
+    prior_rules：已经排在前面（优先级更高）的规则。级联判定下，被前面
+    规则抢走的帧根本走不到本条，所以算阈值时必须把它们从正/负样本里剔掉，
+    否则会搜出一个“理论上很好、实际被前面抢走”的阈值。
+    （实测踩过：too_close 阈值 1.20 时，有 11/17 帧凑近被更前面的
+     hand_face 规则抢走 —— 单看本条阈值是完美的，级联起来全错。）
+
     只在「normal 中位数」和「该类中位数」之间搜，不许跑出这个区间：
     否则样本少的时候会过拟合到某个离群帧上。
     """
-    pos = [v[k] for v in samples.get(label, [])]
-    neg = [v[k] for lb, vs in samples.items() if lb != label for v in vs]
+    def stolen(v) -> bool:
+        """该帧是否会被前面某条规则先命中。"""
+        for r in (prior_rules or []):
+            if r.get("guard"):
+                g = r["guard"]
+                if g[0] in FEATURES and v[FEATURES.index(g[0])] >= g[1]:
+                    continue
+            kk = r["feature_index"]
+            if (v[kk] - r["threshold"]) * r["direction"] > 0:
+                return True
+        return False
+
+    pos = [v[k] for v in samples.get(label, []) if not stolen(v)]
+    neg = [v[k] for lb, vs in samples.items() if lb != label
+           for v in vs if not stolen(v)]
     if not pos or not neg:
         return 0.0
     lo = min(median([v[k] for v in samples["normal"]]), median(pos))
@@ -193,9 +227,20 @@ def best_threshold(samples: dict, label: str, k: int, direction: int) -> float:
     return best[1] if best else (lo + hi) / 2.0
 
 
-def classify(v, rules, samples):
+def feature_stat(feats, index):
+    vals = [v[index] for v in feats if math.isfinite(v[index])
+            and (index < 5 or v[index] < 2.99)]
+    if not vals:
+        return (3.0 if index >= 5 else 0.0), 0.0
+    med = median(vals)
+    return med, mad(vals, med)
+
+
+def classify(v, rules, samples, excluded_label=None):
     """与 C++ PostureProfile::Classify 完全一致：按优先级级联，第一个命中的就是结论。"""
     for r in rules:
+        if r["label"] == excluded_label:
+            continue
         g = r.get("guard")
         if g and v[FEATURES.index(g[0])] >= g[1]:
             continue
@@ -204,7 +249,23 @@ def classify(v, rules, samples):
         if over > 0:
             return r["label"], over / FLOORS[k], r
     if "normal" in samples:
-        return "normal", 0.0, None
+        worst, measured = 0.0, 0
+        for i in range(NF):
+            if excluded_label == "hand_face" and i >= 4:
+                continue
+            med, spread = feature_stat(samples["normal"], i)
+            if i >= 5 and ((med >= 2.99 and spread <= 0) or v[i] >= 2.99):
+                continue
+            if not math.isfinite(v[i]):
+                return None, 0.0, None
+            deviation = abs(v[i] - med)
+            if i == 3:
+                deviation = max(0.0, v[i] - med)
+            if i >= 5:
+                deviation = max(0.0, med - v[i])
+            worst = max(worst, deviation / max(spread, FLOORS[i]))
+            measured += 1
+        return ("normal" if measured and worst <= 3.0 else None), -worst, None
     return None, 0.0, None
 
 
@@ -241,14 +302,33 @@ def recompute(sample_dir: str) -> int:
     return 0
 
 
-def rebaseline(sample_dir: str) -> int:
-    """把全部样本「重锚」到当前校准基准上，并用 raw_metrics 重算特征。
+def baseline_id(baseline: dict) -> str:
+    if not baseline.get("valid") or not baseline.get("created_at"):
+        return ""
+    return (f"{baseline['created_at']}|{baseline.get('camera_id', '')}|"
+            f"{baseline.get('model_sha256', '')}|"
+            f"{baseline.get('frame_width', 0)}x{baseline.get('frame_height', 0)}")
 
-    为什么需要：6 个特征里 5 个是「相对基准」的量。基准一旦重建（换人、
-    挪机位、自动重校准），旧画像的特征就整体偏移了 —— 表现为「明明坐得对，
-    却离正常原型偏 15σ」。样本里存了绝对原始指标，所以可以直接换算，
-    不必让用户重采一遍。
-    """
+
+def validate_sample_baselines(sample_dir: str, current: dict) -> str:
+    expected = baseline_id(current)
+    if not expected:
+        raise ValueError("没有可绑定的当前标定，请先校准")
+    files = sorted(os.listdir(sample_dir)) if os.path.isdir(sample_dir) else []
+    for fn in files:
+        if not fn.endswith(".json"):
+            continue
+        with open(os.path.join(sample_dir, fn)) as f:
+            data = json.load(f)
+        if baseline_id(data.get("baseline") or {}) != expected:
+            raise ValueError(f"{fn} 与当前标定不匹配，必须重新采集，不能混用旧样本")
+        if data.get("rebased_at"):
+            raise ValueError(f"{fn} 是旧样本重锚结果，缺少现场一致性证据，请重新采集")
+    return expected
+
+
+def rebaseline(sample_dir: str) -> int:
+    """Only recompute within the same calibration; never relabel old data."""
     cur = get_baseline()
     if not cur.get("valid"):
         print("!! 当前没有有效基准，无法重锚", file=sys.stderr)
@@ -256,6 +336,11 @@ def rebaseline(sample_dir: str) -> int:
     if not os.path.isdir(sample_dir):
         print(f"!! 没有样本目录 {sample_dir}", file=sys.stderr)
         return 1
+    try:
+        validate_sample_baselines(sample_dir, cur)
+    except (ValueError, OSError) as exc:
+        print(f"!! {exc}", file=sys.stderr)
+        return 2
     total = 0
     for fn in sorted(os.listdir(sample_dir)):
         if not fn.endswith(".json"):
@@ -275,7 +360,7 @@ def rebaseline(sample_dir: str) -> int:
         data["baseline"] = cur
         data["features"] = feats
         data["count"] = len(feats)
-        data["rebased_at"] = time.strftime("%F %T")
+        data["recomputed_at"] = time.strftime("%F %T")
         with open(path, "w") as f:
             json.dump(data, f, indent=1)
         print(f"   {fn[:-5]}: {len(feats)} 帧")
@@ -345,12 +430,18 @@ def read_status(timeout: float = 3.0):
 def read_frames(seconds: float) -> list[dict]:
     """在 seconds 秒内持续读状态，返回所有 metrics 有效的帧。"""
     out: list[dict] = []
+    seen = set()
     end = time.time() + seconds
     while time.time() < end:
         st = read_status()
         if st is None:
             time.sleep(0.15)
             continue
+        frame_id = st.get("frame_id")
+        if frame_id is not None and frame_id in seen:
+            continue
+        if frame_id is not None:
+            seen.add(frame_id)
         # 状态字段是扁平的（不是嵌在 metrics 下）
         if not st.get("metrics_valid"):
             out.append({"valid": False,
@@ -359,6 +450,8 @@ def read_frames(seconds: float) -> list[dict]:
             continue
         out.append({
             "valid": True,
+            "frame_id": frame_id,
+            "baseline_created_at": st.get("baseline_created_at"),
             "ear_mid_offset_y": st.get("ear_mid_offset_y"),
             "head_offset_y": st.get("head_offset_y"),
             "ear_angle_deg": st.get("ear_angle_deg"),
@@ -368,6 +461,10 @@ def read_frames(seconds: float) -> list[dict]:
             # 必须用 raw：门控后的 wrist_to_nose 失败时是 99，
             # 而 C++ 特征用的是 raw，混用会让训练和运行期差一个量级
             "wrist_to_nose_raw": st.get("wrist_to_nose_raw"),
+            "face_geom_valid": bool(st.get("face_geom_valid")),
+            "face_wrist_ear": st.get("face_wrist_ear"),
+            "face_arm_raise": st.get("face_arm_raise"),
+            "face_wrist_below_ear": st.get("face_wrist_below_ear"),
             "ear_mid_valid": bool(st.get("ear_mid_valid")),
             "ear_angle_valid": bool(st.get("ear_angle_valid")),
             "wrist_valid": bool(st.get("wrist_valid")),
@@ -421,11 +518,17 @@ def features_of(frame: dict, baseline: dict):
     else:
         wrist_rise = 0.0
 
-    wrist_near = frame.get("wrist_to_nose_raw", 3.0)
+    wrist_near = frame.get("wrist_to_nose_raw", 3.0) if frame.get("wrist_valid") else 3.0
     if not isinstance(wrist_near, (int, float)) or wrist_near > 3.0:
         wrist_near = 3.0
 
-    return [head_drop, ear_tilt, shoulder_tilt, size, wrist_rise, float(wrist_near)]
+    # 手腕到耳中点距离 / 肩宽（老样本没有这个字段，用 3.0 哨兵）
+    wrist_face = frame.get("face_wrist_ear", 3.0) if frame.get("face_geom_valid") else 3.0
+    if not isinstance(wrist_face, (int, float)) or wrist_face > 3.0:
+        wrist_face = 3.0
+
+    return [head_drop, ear_tilt, shoulder_tilt, size, wrist_rise, float(wrist_near),
+            float(wrist_face)]
 
 
 # ---------------------------------------------------------------- 采集
@@ -446,6 +549,8 @@ def collect(label: str, seconds: float, sample_dir: str, settle: float = 6.0) ->
         print("   要领：下巴朝胸口明显低头（像看键盘/手机），保持不动")
     elif label == "head_tilt":
         print("   要领：头向一侧明显歪 20~30°（耳朵靠向同侧肩膀），保持不动")
+    elif label == "shoulder_tilt":
+        print("   要领：保持头部直立，一侧肩膀明显抬高，避免同时歪头")
     elif label == "too_close":
         print("   要领：身体前倾、脸向屏幕靠近（别真贴上），保持不动")
     elif label == "hand_face":
@@ -463,6 +568,11 @@ def collect(label: str, seconds: float, sample_dir: str, settle: float = 6.0) ->
     print(f"   采集中（{seconds:.0f} 秒），保持别动…          ")
 
     frames = read_frames(seconds)
+    if baseline_id(get_baseline()) != baseline_id(baseline) or any(
+            f.get("valid") and f.get("baseline_created_at") != baseline.get("created_at")
+            for f in frames):
+        print("!! 采集期间标定发生变化，丢弃本批样本，请重新采集", file=sys.stderr)
+        return 2
     feats = []
     skipped = []
     for f in frames:
@@ -488,7 +598,7 @@ def collect(label: str, seconds: float, sample_dir: str, settle: float = 6.0) ->
                 print(f"   剔除 {len(feats) - len(kept)} 个极端帧，保留 {len(kept)} 个")
             feats = kept
 
-    if len(feats) < 5:
+    if len(feats) < 15 or len(feats) < len(frames) * 0.6:
         print(f"\n!! 只拿到 {len(feats)} 个有效样本（共 {len(frames)} 帧），不够。")
         if skipped:
             from collections import Counter
@@ -501,8 +611,9 @@ def collect(label: str, seconds: float, sample_dir: str, settle: float = 6.0) ->
     path = os.path.join(sample_dir, f"{label}.json")
     # 同时存原始指标快照：以后改特征定义（例如加第 6 个特征）可以直接重算，
     # 不需要让用户重采。
-    RAW_KEYS = ("ear_mid_offset_y", "head_offset_y", "ear_angle_deg",
+    RAW_KEYS = ("frame_id", "baseline_created_at", "ear_mid_offset_y", "head_offset_y", "ear_angle_deg",
                 "shoulder_angle_deg", "width_ratio", "wrist_y_rel",
+                "face_geom_valid", "face_wrist_ear", "face_arm_raise", "face_wrist_below_ear",
                 "wrist_to_nose_raw", "ear_mid_valid", "ear_angle_valid",
                 "wrist_valid")
     raw = [{k: fr.get(k) for k in RAW_KEYS}
@@ -533,7 +644,11 @@ def collect(label: str, seconds: float, sample_dir: str, settle: float = 6.0) ->
                 b = [v[i] for v in feats]
                 ma, mb = median(a), median(b)
                 gap = abs(mb - ma)
-                within = max(1e-9, (mad(a, ma) + mad(b, mb)) / 2.0)
+                if i >= 5 and ((ma >= 2.99 and mad(a, ma) <= 0) or
+                               (mb >= 2.99 and mad(b, mb) <= 0)):
+                    print(f"        {name:15s} 有一组缺测，不参与可分性评估")
+                    continue
+                within = max(FLOORS[i], (mad(a, ma) + mad(b, mb)) / 2.0)
                 ratio = gap / within
                 mark = "✅" if ratio >= 2.0 else ("⚠️" if ratio >= 1.0 else "  ")
                 print(f"     {mark} {name:15s} normal {ma:+7.3f}  vs  {label} {mb:+7.3f}"
@@ -543,11 +658,12 @@ def collect(label: str, seconds: float, sample_dir: str, settle: float = 6.0) ->
             # 光看比值会被 MAD 极小的特征骗（例如 size 差 0.008 也能算出比值 60）
             best = 0.0
             best_name = ""
-            for i, name in enumerate(FEATURES):
+            for name in CAND_FEATURES.get(label, []):
+                i = FEATURES.index(name)
                 a = [v[i] for v in samples["normal"]]
                 b = [v[i] for v in feats]
                 gap = abs(median(b) - median(a))
-                within = max(1e-9, (mad(a, median(a)) + mad(b, median(b))) / 2.0)
+                within = max(FLOORS[i], (mad(a, median(a)) + mad(b, median(b))) / 2.0)
                 ratio = gap / within
                 # 绝对差必须超过该特征下限的 2 倍，否则没有实际意义
                 if gap < FLOORS[i] * 2.0:
@@ -563,8 +679,8 @@ def collect(label: str, seconds: float, sample_dir: str, settle: float = 6.0) ->
             else:
                 print(f"\n   ❌ 分不开：最好的特征「{FEATURE_ZH[best_name]}」分离比只有 {best:.2f}"
                       f"（需要 ≥2）")
-                print("      这说明摄像头在这个机位下拿不到能区分该姿势的关键点。")
-                print("      不是阈值问题，调阈值只会让它随机误报。")
+                print("      当前样本的定义特征差异不足，请检查姿势、关键点和取景后重采。")
+                print("      不自动生成这类规则，避免用缺测或无关特征得出虚假的可分结论。")
                 ok = False
             return 0 if ok else 3
     return 0
@@ -591,8 +707,9 @@ def report(sample_dir: str) -> int:
     # 类原型
     proto = {}
     for label, feats in samples.items():
-        med = [median([v[i] for v in feats]) for i in range(NF)]
-        sd = [mad([v[i] for v in feats], med[i]) for i in range(NF)]
+        stats = [feature_stat(feats, i) for i in range(NF)]
+        med = [x[0] for x in stats]
+        sd = [x[1] for x in stats]
         proto[label] = (med, sd, len(feats))
     labels = list(proto.keys())
 
@@ -621,7 +738,7 @@ def report(sample_dir: str) -> int:
         if best < 2.0:
             weak.append(name)
 
-    # 留一交叉验证（最近原型）
+    # Replay training samples; this is not cross-validation.
     rules = build_rules(samples)
     print("\n== 判定规则（按优先级，数据自动算出）==")
     if not rules:
@@ -635,7 +752,7 @@ def report(sample_dir: str) -> int:
             ">=" if r["direction"] > 0 else "<=", r["threshold"],
             r["normal_median"], r["label"], r["class_median"], r["gap"], extra))
 
-    print("\n== 混淆矩阵（级联判定 + 优先级）==")
+    print("\n== 训练样本混淆矩阵（非独立准确率）==")
     head = "真\\判".ljust(12)
     print("   " + head + "".join(f"{l[:8]:>10s}" for l in labels))
     correct = 0
@@ -652,16 +769,20 @@ def report(sample_dir: str) -> int:
                 correct += hit
         print(row)
     n_all = sum(len(samples[l]) for l in labels)
-    print(f"\n   总体准确率 {correct}/{n_all} = {correct / max(1, n_all) * 100:.1f}%")
+    print(f"\n   训练样本命中率 {correct}/{n_all} = {correct / max(1, n_all) * 100:.1f}%")
     if weak:
         print(f"\n   ⚠️ 这些特征区分不开已采的姿势：{', '.join(weak)}")
-        print("      如果准确率低，多半是摄像头机位拿不到相应关键点，"
-              "不是分类算法的问题。")
+        print("      请检查取景、标签和类间重叠，使用独立样本复测后再判断原因。")
     return 0
 
 
 # ---------------------------------------------------------------- 生成画像
 def build(sample_dir: str, profile_file: str) -> int:
+    try:
+        binding = validate_sample_baselines(sample_dir, get_baseline())
+    except (ValueError, OSError) as exc:
+        print(f"!! {exc}", file=sys.stderr)
+        return 2
     samples = load_samples(sample_dir)
     if "normal" not in samples:
         print("!! 必须先采 normal（其它姿势都是相对它算的）", file=sys.stderr)
@@ -672,8 +793,9 @@ def build(sample_dir: str, profile_file: str) -> int:
 
     proto = {}
     for label, feats in samples.items():
-        med = [median([v[i] for v in feats]) for i in range(NF)]
-        sd = [mad([v[i] for v in feats], med[i]) for i in range(NF)]
+        stats = [feature_stat(feats, i) for i in range(NF)]
+        med = [x[0] for x in stats]
+        sd = [x[1] for x in stats]
         proto[label] = (med, sd, len(feats))
     # 保持固定顺序（normal 在最前，便于阅读）
     labels = [l for l in LABELS_ORDER if l in proto] + \
@@ -684,6 +806,11 @@ def build(sample_dir: str, profile_file: str) -> int:
         scales.append(max(s, FLOORS[i]))
 
     rules = build_rules(samples)
+    missing = set(samples) - {"normal", "away"} - {r["label"] for r in rules}
+    if missing:
+        print("!! 以下已采姿势尚不可可靠区分，需重采，未覆盖现有画像：" +
+              ", ".join(sorted(missing)), file=sys.stderr)
+        return 2
     if not rules:
         print("!! 没有可用的判定规则（先采 normal + 至少一个异常姿势）",
               file=sys.stderr)
@@ -696,6 +823,7 @@ def build(sample_dir: str, profile_file: str) -> int:
              "# class 行：原始统计（诊断用，不参与判定）",
              "#   class <标签> <样本数> <特征中位数> <特征MAD>",
              "# 特征顺序：" + " ".join(FEATURES),
+             "baseline_id\t" + binding,
              "scale" + "".join(f"\t{x:.4f}" for x in scales)]
     for l in labels:
         med, sd, n = proto[l]
@@ -708,10 +836,16 @@ def build(sample_dir: str, profile_file: str) -> int:
             r["threshold"], r["normal_median"], r["class_median"])
         if r.get("guard"):
             row += "\t%s\t%.4f" % (r["guard"][0], r["guard"][1])
+        if r.get("guard2"):
+            # guard2 不写进画像文件：它是「手必须在鼻下方」的方向性几何约束，
+            # 由 C++ 侧（PostureAnalyzer::ProfileUpdate）统一把关，
+            # 免得画像文件成为第二个容易漂移的真相源。
+            pass
         lines.append(row)
     os.makedirs(os.path.dirname(profile_file), exist_ok=True)
-    with open(profile_file, "w") as f:
+    with open(profile_file + ".tmp", "w") as f:
         f.write("\n".join(lines) + "\n")
+    os.replace(profile_file + ".tmp", profile_file)
     print(f"已生成画像 {profile_file}（{len(labels)} 个姿势，"
           f"{sum(proto[l][2] for l in labels)} 个样本）")
     print("\n生效方式：")
@@ -730,7 +864,7 @@ def main() -> int:
     ap.add_argument("--sample-dir", default=SAMPLE_DIR)
     ap.add_argument("--profile-file", default=PROFILE_FILE)
     ap.add_argument("--rebaseline", action="store_true",
-                    help="把样本重锚到当前校准基准并重算特征（重新校准后一定要跑）")
+                    help="只允许同标定重算；跨标定必须重新采集")
     ap.add_argument("--recompute", action="store_true",
                     help="用已存 raw_metrics 重算特征（改了特征定义后用，不必重采）")
     ap.add_argument("--report", action="store_true")
